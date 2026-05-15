@@ -293,7 +293,7 @@ function calcServerPeriodStats(
   events: ServerEvent[],
   periodStart: Date,
   periodEnd: Date,
-): { totalCount: number; hoursPerDevice: number; plannedHours: number; unplannedHours: number; availabilityPct: number }[] {
+): { totalCount: number; hoursPerDevice: number; totalHours: number; plannedHours: number; unplannedHours: number; availabilityPct: number }[] {
   return assets.map((asset) => {
     const hoursPerDevice = getHoursBetween(periodStart, new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate() + 1))
     let plannedMins = 0
@@ -318,7 +318,7 @@ function calcServerPeriodStats(
       ? Math.round(((totalHours - unplannedHours) / totalHours) * 10000) / 100
       : 100
 
-    return { totalCount: asset.quantity, hoursPerDevice, plannedHours, unplannedHours, availabilityPct }
+    return { totalCount: asset.quantity, hoursPerDevice, totalHours, plannedHours, unplannedHours, availabilityPct }
   })
 }
 
@@ -455,52 +455,118 @@ interface ChartData {
   month: string
   planned: number
   unplanned: number
+  totalHours: number
 }
 
-function BarChartSection({ data, title }: { data: ChartData[]; title: string }) {
-  const maxVal = Math.max(...data.map((d) => Math.max(d.planned, d.unplanned)), 1)
+// ── SVG Donut Chart ──
+
+function DonutChart({ value, size = 120, strokeWidth = 14, color1 = '#6366f1', color2 = '#38bdf8' }: {
+  value: number  // 0~100 percentage for the primary segment
+  size?: number
+  strokeWidth?: number
+  color1?: string
+  color2?: string
+}) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const offset1 = circumference * (1 - value / 100)
+  const offset2 = circumference * (1 - (100 - value) / 100)
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
+      {/* Background track */}
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--color-border)" strokeWidth={strokeWidth} opacity={0.3} />
+      {/* Primary segment (unplanned %) */}
+      <circle
+        cx={size / 2} cy={size / 2} r={radius} fill="none"
+        stroke={color1} strokeWidth={strokeWidth} strokeLinecap="round"
+        strokeDasharray={circumference} strokeDashoffset={offset1}
+        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+      />
+      {/* Secondary segment (available %) */}
+      <circle
+        cx={size / 2} cy={size / 2} r={radius} fill="none"
+        stroke={color2} strokeWidth={strokeWidth} strokeLinecap="round"
+        strokeDasharray={circumference} strokeDashoffset={offset2}
+        style={{ transition: 'stroke-dashoffset 0.6s ease', transform: `rotate(${value * 3.6}deg)`, transformOrigin: '50% 50%' }}
+      />
+    </svg>
+  )
+}
+
+function DonutChartSection({ data, title }: { data: ChartData[]; title: string }) {
   const totalPlanned = data.reduce((s, d) => s + d.planned, 0)
   const totalUnplanned = data.reduce((s, d) => s + d.unplanned, 0)
+  const totalHours = data.reduce((s, d) => s + d.totalHours, 0)
+  const unplannedPct = totalHours > 0 ? Math.round((totalUnplanned / totalHours) * 10000) / 100 : 0
+  const availablePct = totalHours > 0 ? Math.round(((totalHours - totalUnplanned) / totalHours) * 10000) / 100 : 100
 
   return (
     <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] p-6 mb-6">
       <h3 className="font-semibold mb-4">{title}</h3>
-      <div className="flex items-end gap-6 h-48 mb-4">
-        {data.map((d) => (
-          <div key={d.month} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-            <div className="flex gap-1 items-end flex-1 w-full justify-center">
-              {/* Planned bar */}
-              <div className="flex flex-col items-center w-8">
-                <span className="text-xs text-amber-600 mb-1">{d.planned > 0 ? d.planned.toFixed(1) : ''}</span>
-                <div
-                  className="w-full bg-amber-400 rounded-t"
-                  style={{ height: `${maxVal > 0 ? (d.planned / maxVal) * 120 : 0}px`, minHeight: d.planned > 0 ? '4px' : '0px' }}
-                />
-              </div>
-              {/* Unplanned bar */}
-              <div className="flex flex-col items-center w-8">
-                <span className="text-xs text-red-600 mb-1">{d.unplanned > 0 ? d.unplanned.toFixed(1) : ''}</span>
-                <div
-                  className="w-full bg-red-400 rounded-t"
-                  style={{ height: `${maxVal > 0 ? (d.unplanned / maxVal) * 120 : 0}px`, minHeight: d.unplanned > 0 ? '4px' : '0px' }}
-                />
-              </div>
+
+      <div className="flex flex-wrap gap-6 items-start">
+        {/* Season total donut */}
+        <div className="flex flex-col items-center gap-2 min-w-[160px]">
+          <div className="relative">
+            <DonutChart value={unplannedPct} size={140} strokeWidth={18} color1="#7c3aed" color2="#38bdf8" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold">{availablePct}%</span>
+              <span className="text-xs text-[var(--color-text-muted)]">可用率</span>
             </div>
-            <span className="text-xs text-[var(--color-text-muted)] mt-1">{d.month}</span>
           </div>
-        ))}
+          <span className="text-sm font-medium mt-1">季度總計</span>
+        </div>
+
+        {/* Per-month donuts */}
+        {data.map((d) => {
+          const mUnplannedPct = d.totalHours > 0 ? Math.round((d.unplanned / d.totalHours) * 10000) / 100 : 0
+          const mAvailablePct = d.totalHours > 0 ? Math.round(((d.totalHours - d.unplanned) / d.totalHours) * 10000) / 100 : 100
+          const hasData = d.totalHours > 0
+
+          return (
+            <div key={d.month} className="flex flex-col items-center gap-2 min-w-[120px]">
+              <div className="relative">
+                <DonutChart
+                  value={hasData ? mUnplannedPct : 0}
+                  size={100}
+                  strokeWidth={12}
+                  color1="#7c3aed"
+                  color2="#38bdf8"
+                />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  {hasData ? (
+                    <>
+                      <span className="text-lg font-bold">{mAvailablePct}%</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)]">可用率</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-[var(--color-text-muted)]">尚無資料</span>
+                  )}
+                </div>
+              </div>
+              <span className="text-xs text-[var(--color-text-muted)]">{d.month}</span>
+            </div>
+          )
+        })}
       </div>
-      <div className="flex items-center gap-6 text-sm border-t border-[var(--color-border)] pt-3">
+
+      {/* Legend & totals */}
+      <div className="flex flex-wrap items-center gap-6 text-sm border-t border-[var(--color-border)] pt-4 mt-4">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-amber-400" />
-          <span>計畫性停機: {totalPlanned.toFixed(2)} hrs</span>
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#38bdf8' }} />
+          <span>可用時數: {(totalHours - totalPlanned - totalUnplanned).toFixed(1)} hrs</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-red-400" />
-          <span>非計畫性停機: {totalUnplanned.toFixed(2)} hrs</span>
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+          <span>計畫性停機: {totalPlanned.toFixed(1)} hrs</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#7c3aed' }} />
+          <span>非計畫性停機: {totalUnplanned.toFixed(1)} hrs</span>
         </div>
         <div className="ml-auto font-medium">
-          合計: {(totalPlanned + totalUnplanned).toFixed(2)} hrs
+          服務總時數: {totalHours.toFixed(0)} hrs
         </div>
       </div>
     </div>
@@ -634,18 +700,20 @@ export default function ReportsPage() {
 
   // ═══ Chart data for network ═══
   const networkChartData: ChartData[] = useMemo(() => {
-    return quarterPeriods.map((period, i) => {
+    return quarterPeriods.map((period) => {
       const isPast = period.end < now || (period.start <= now && period.end >= now)
-      if (!isPast) return { month: period.label.split('~')[0], planned: 0, unplanned: 0 }
+      if (!isPast) return { month: period.label.split('~')[0], planned: 0, unplanned: 0, totalHours: 0 }
 
       let planned = 0
       let unplanned = 0
+      let totalH = 0
       deviceGroups.forEach((group) => {
         const stats = calcPeriodStats(group.assets, events, period.start, period.end)
         planned += stats.plannedHours
         unplanned += stats.unplannedHours
+        totalH += stats.hoursPerDevice * stats.totalCount
       })
-      return { month: period.label.split('~')[0], planned, unplanned }
+      return { month: period.label.split('~')[0], planned, unplanned, totalHours: totalH }
     })
   }, [quarterPeriods, deviceGroups, events])
 
@@ -653,16 +721,18 @@ export default function ReportsPage() {
   const hardwareChartData: ChartData[] = useMemo(() => {
     return quarterPeriods.map((period) => {
       const isPast = period.end < now || (period.start <= now && period.end >= now)
-      if (!isPast) return { month: period.label.split('~')[0], planned: 0, unplanned: 0 }
+      if (!isPast) return { month: period.label.split('~')[0], planned: 0, unplanned: 0, totalHours: 0 }
 
       let planned = 0
       let unplanned = 0
+      let totalH = 0
       SERVER_ASSETS.forEach((asset) => {
         const stats = calcServerPeriodStats([asset], DEMO_SERVER_EVENTS, period.start, period.end)
         planned += stats[0].plannedHours
         unplanned += stats[0].unplannedHours
+        totalH += stats[0].totalHours
       })
-      return { month: period.label.split('~')[0], planned, unplanned }
+      return { month: period.label.split('~')[0], planned, unplanned, totalHours: totalH }
     })
   }, [quarterPeriods])
 
@@ -1007,7 +1077,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Chart */}
-          <BarChartSection data={hardwareChartData} title={`${rocYear}年第${quarter}季 硬體停機時數統計`} />
+          <DonutChartSection data={hardwareChartData} title={`${rocYear}年第${quarter}季 硬體停機時數統計`} />
 
           {/* ═══ 表2-4-2: Monthly Summary ═══ */}
           <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden mb-6">
@@ -1173,7 +1243,7 @@ export default function ReportsPage() {
               </div>
 
               {/* Chart */}
-              <BarChartSection data={networkChartData} title={`${rocYear}年第${quarter}季 網路停機時數統計`} />
+              <DonutChartSection data={networkChartData} title={`${rocYear}年第${quarter}季 網路停機時數統計`} />
 
               {/* ═══ Part 1: Quarterly Device Breakdown ═══ */}
               <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden mb-6">
