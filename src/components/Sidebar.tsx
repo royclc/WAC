@@ -1,0 +1,111 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import {
+  Calendar,
+  Server,
+  Wifi,
+  Users,
+  HardDrive,
+  LogOut,
+  LayoutDashboard,
+  Wrench,
+  Building2,
+  Tag,
+  Store,
+  Cable,
+  Landmark,
+  BarChart3,
+} from 'lucide-react'
+
+const navItems = [
+  { href: '/calendar', label: '工作月曆', icon: Calendar },
+  { href: '/maintenance', label: '保養記錄', icon: Wrench },
+  { href: '/availability/server', label: '硬體可用率', icon: HardDrive },
+  { href: '/availability/network', label: '網路可用率', icon: Wifi },
+  { href: '/reports', label: '統計報表', icon: BarChart3 },
+]
+
+const adminItems = [
+  { href: '/admin/organizations', label: '單位管理', icon: Landmark },
+  { href: '/admin/servers', label: '硬體管理', icon: HardDrive },
+  { href: '/admin/units', label: '網路管理', icon: Building2 },
+  { href: '/admin/circuits', label: '線路管理', icon: Cable },
+  { href: '/admin/vendors', label: '廠商管理', icon: Store },
+  { href: '/admin/event-types', label: '事件類型管理', icon: Tag },
+  { href: '/admin/users', label: '使用者管理', icon: Users },
+]
+
+interface SidebarProps {
+  userRole?: 'admin' | 'user'
+  userName?: string
+}
+
+export default function Sidebar({ userRole = 'user', userName = '使用者' }: SidebarProps) {
+  const pathname = usePathname()
+
+  return (
+    <aside className="w-60 bg-[var(--color-card)] border-r border-[var(--color-border)] flex flex-col h-screen fixed left-0 top-0">
+      <div className="p-4 border-b border-[var(--color-border)]">
+        <h1 className="text-lg font-bold text-[var(--color-primary)]">
+          <LayoutDashboard className="inline-block w-5 h-5 mr-2" />
+          MAC 系統
+        </h1>
+      </div>
+
+      <nav className="flex-1 p-3 space-y-1">
+        <p className="text-xs text-[var(--color-text-muted)] px-3 py-2 uppercase tracking-wider">功能</p>
+        {navItems.map((item) => {
+          const active = pathname.startsWith(item.href)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                active
+                  ? 'bg-blue-50 text-[var(--color-primary)] font-medium'
+                  : 'text-[var(--color-text-muted)] hover:bg-gray-50 hover:text-[var(--color-text)]'
+              }`}
+            >
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </Link>
+          )
+        })}
+
+        {userRole === 'admin' && (
+          <>
+            <p className="text-xs text-[var(--color-text-muted)] px-3 py-2 mt-4 uppercase tracking-wider">管理</p>
+            {adminItems.map((item) => {
+              const active = pathname.startsWith(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    active
+                      ? 'bg-blue-50 text-[var(--color-primary)] font-medium'
+                      : 'text-[var(--color-text-muted)] hover:bg-gray-50 hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </>
+        )}
+      </nav>
+
+      <div className="p-3 border-t border-[var(--color-border)]">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-sm text-[var(--color-text-muted)]">{userName}</span>
+          <button className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </aside>
+  )
+}

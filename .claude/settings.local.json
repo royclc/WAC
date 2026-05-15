@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": []
+  },
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_b2acc23b927cc759b8b8063691fc613faa4972b6"
+      ]
+    }
+  }
+}
