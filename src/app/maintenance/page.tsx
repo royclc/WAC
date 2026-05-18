@@ -278,7 +278,7 @@ export default function MaintenancePage() {
                 return (
                   <div
                     key={idx}
-                    onClick={() => setSelectedDate(date)}
+                    onClick={() => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
                     className={`min-h-[100px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${
                       !inMonth ? 'bg-[var(--color-bg-elevated)]' : 'hover:bg-[var(--color-primary-dim)]'
                     } ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}

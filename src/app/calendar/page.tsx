@@ -274,7 +274,7 @@ export default function CalendarPage() {
 
           <CalendarGrid
             events={calendarEvents}
-            onDateClick={(date) => setSelectedDate(date)}
+            onDateClick={(date) => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
             onEventClick={(event) => {
               if (events.find((e) => e.id === event.id)) {
                 openEditEvent(event.id)

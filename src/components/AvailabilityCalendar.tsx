@@ -291,7 +291,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
               return (
                 <div
                   key={idx}
-                  onClick={() => setSelectedDate(date)}
+                  onClick={() => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
                   className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${
                     !inMonth ? 'bg-[var(--color-bg-elevated)]' : hasDowntime ? 'bg-[var(--color-badge-red)]/50' : 'hover:bg-[var(--color-primary-dim)]'
                   } ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}

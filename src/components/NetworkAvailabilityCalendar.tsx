@@ -477,7 +477,7 @@ export default function NetworkAvailabilityCalendar() {
               const hasUnplanned = dayEvents.some((e) => e.plan_type === 'unplanned')
               const dow = date.getDay()
               return (
-                <div key={idx} onClick={() => setSelectedDate(date)}
+                <div key={idx} onClick={() => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
                   className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-[var(--color-day-outside)]' : hasUnplanned ? 'bg-[var(--color-danger-dim)]' : dayEvents.length > 0 ? 'bg-[var(--color-warning-dim)]' : 'hover:bg-[var(--color-table-row-hover)]'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${dow === 0 ? 'text-[var(--color-weekend-sun)]' : dow === 6 ? 'text-[var(--color-weekend-sat)]' : ''}`}>{format(date, 'd')}</span>
@@ -755,11 +755,14 @@ export default function NetworkAvailabilityCalendar() {
                       <th className="text-left px-4 py-3 font-medium">設備/線路名稱</th>
                       <th className="text-left px-4 py-3 font-medium">開始時間</th>
                       <th className="text-left px-4 py-3 font-medium">結束時間</th>
+                      <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                       <th className="text-left px-4 py-3 font-medium">說明</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {quarterDeviceEvents.map((e) => (
+                    {quarterDeviceEvents.map((e) => {
+                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
+                      return (
                       <tr key={`d-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]">設備</span>
@@ -772,11 +775,14 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="px-4 py-3">{e.asset_name}</td>
                         <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.start_time)}</td>
                         <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.end_time)}</td>
+                        <td className="text-right px-4 py-3 font-semibold">{stopHours}</td>
                         <td className="px-4 py-3 text-[var(--color-text-muted)]">{e.description || e.title || '-'}</td>
                       </tr>
-                    ))}
+                      )
+                    })}
                     {quarterCircuitEvents.map((e) => {
                       const circuit = circuits.find((c) => c.id === e.circuit_id)
+                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
                       return (
                         <tr key={`c-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                           <td className="px-4 py-3">
@@ -790,6 +796,7 @@ export default function NetworkAvailabilityCalendar() {
                           <td className="px-4 py-3">{circuit ? `${circuit.unit} ${circuit.circuit_number}` : e.circuit_id}</td>
                           <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.start_time)}</td>
                           <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.end_time)}</td>
+                          <td className="text-right px-4 py-3 font-semibold">{stopHours}</td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">{e.title || '-'}</td>
                         </tr>
                       )
