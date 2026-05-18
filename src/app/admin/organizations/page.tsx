@@ -24,7 +24,11 @@ interface AutoDevice {
   zone: 'internal' | 'external'
   device_type: string
   vendor: string
+  quantity: number
 }
+
+// 設備數量 map key: `${zone}_${device_type}`
+type DeviceQtyMap = Record<string, number>
 
 interface UnitCircuit {
   id: string
@@ -49,19 +53,35 @@ const HQ_DEVICE_TYPES = ['防火牆', '核心交換器', '主機交換器', '邊
 // 分局/稽徵所設備類型
 const BRANCH_DEVICE_TYPES = ['防火牆', '前端交換器', '聚合交換器']
 
-function generateDevices(unitName: string, unitType: UnitType): AutoDevice[] {
+function getDefaultQtyMap(unitType: UnitType): DeviceQtyMap {
+  const types = unitType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES
+  const map: DeviceQtyMap = {}
+  const zones: Array<'internal' | 'external'> = ['internal', 'external']
+  zones.forEach((zone) => {
+    types.forEach((dt) => {
+      map[`${zone}_${dt}`] = unitType === 'headquarters' ? 2 : 1
+    })
+  })
+  return map
+}
+
+function generateDevices(unitName: string, unitType: UnitType, qtyMap?: DeviceQtyMap): AutoDevice[] {
   const types = unitType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES
   const zones: Array<'internal' | 'external'> = ['internal', 'external']
   const devices: AutoDevice[] = []
   zones.forEach((zone) => {
     types.forEach((dt) => {
-      devices.push({
-        id: crypto.randomUUID(),
-        name: `${unitName}${ZONE_LABELS[zone]}${dt}`,
-        zone,
-        device_type: dt,
-        vendor: '宏華',
-      })
+      const qty = qtyMap?.[`${zone}_${dt}`] ?? 1
+      if (qty > 0) {
+        devices.push({
+          id: crypto.randomUUID(),
+          name: `${unitName}${ZONE_LABELS[zone]}${dt}`,
+          zone,
+          device_type: dt,
+          vendor: '宏華',
+          quantity: qty,
+        })
+      }
     })
   })
   return devices
@@ -120,6 +140,7 @@ export default function OrganizationsPage() {
   // Form state
   const [formName, setFormName] = useState('')
   const [formType, setFormType] = useState<UnitType>('branch')
+  const [formDeviceQty, setFormDeviceQty] = useState<DeviceQtyMap>(() => getDefaultQtyMap('branch'))
   const [formCircuits, setFormCircuits] = useState<Array<{ circuit_number: string; bandwidth: string; ip_address: string }>>([])
 
   // Edit circuit modal
@@ -142,6 +163,7 @@ export default function OrganizationsPage() {
     setEditingId(null)
     setFormName('')
     setFormType('branch')
+    setFormDeviceQty(getDefaultQtyMap('branch'))
     setFormCircuits([{ circuit_number: '', bandwidth: '', ip_address: '' }])
     setShowModal(true)
   }
@@ -150,6 +172,14 @@ export default function OrganizationsPage() {
     setEditingId(unit.id)
     setFormName(unit.name)
     setFormType(unit.type)
+    // Build qty map from existing devices
+    const qtyMap = getDefaultQtyMap(unit.type)
+    Object.keys(qtyMap).forEach((k) => { qtyMap[k] = 0 })
+    unit.devices.forEach((d) => {
+      const key = `${d.zone}_${d.device_type}`
+      qtyMap[key] = d.quantity || 1
+    })
+    setFormDeviceQty(qtyMap)
     setFormCircuits(unit.circuits.map((c) => ({ circuit_number: c.circuit_number, bandwidth: c.bandwidth, ip_address: c.ip_address })))
     setShowModal(true)
   }
@@ -179,20 +209,17 @@ export default function OrganizationsPage() {
       }))
 
     if (editingId) {
-      // Edit: update name and circuits, keep devices
+      // Edit: update name, type, device quantities, and circuits
       setUnits(units.map((u) => {
         if (u.id !== editingId) return u
-        // If name changed, regenerate device names
-        const nameChanged = u.name !== formName.trim()
-        const newDevices = nameChanged
-          ? u.devices.map((d) => ({ ...d, name: d.name.replace(u.name, formName.trim()) }))
-          : u.devices
-        return { ...u, name: formName.trim(), type: formType, devices: newDevices, circuits: validCircuits }
+        const name = formName.trim()
+        const newDevices = generateDevices(name, formType, formDeviceQty)
+        return { ...u, name, type: formType, devices: newDevices, circuits: validCircuits }
       }))
     } else {
-      // Create: auto-generate devices
+      // Create: auto-generate devices with specified quantities
       const name = formName.trim()
-      const devices = generateDevices(name, formType)
+      const devices = generateDevices(name, formType, formDeviceQty)
       const newUnit: OrgUnit = {
         id: crypto.randomUUID(),
         name,
@@ -202,7 +229,6 @@ export default function OrganizationsPage() {
         created_at: new Date().toISOString().slice(0, 10),
       }
       setUnits([...units, newUnit])
-      // Auto-expand to show the new unit
       setExpandedUnits((prev) => new Set([...prev, newUnit.id]))
     }
     setShowModal(false)
@@ -254,7 +280,7 @@ export default function OrganizationsPage() {
     }))
   }
 
-  const totalDevices = units.reduce((sum, u) => sum + u.devices.length, 0)
+  const totalDevices = units.reduce((sum, u) => sum + u.devices.reduce((s, d) => s + (d.quantity || 1), 0), 0)
   const totalCircuits = units.reduce((sum, u) => sum + u.circuits.length, 0)
 
   return (
@@ -318,7 +344,7 @@ export default function OrganizationsPage() {
                   </div>
                   <div className="flex gap-2 ml-4">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)]">
-                      <Wifi className="w-3 h-3 inline mr-1" />{unit.devices.length} 設備
+                      <Wifi className="w-3 h-3 inline mr-1" />{unit.devices.reduce((s, d) => s + (d.quantity || 1), 0)} 設備
                     </span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)]">
                       <Cable className="w-3 h-3 inline mr-1" />{unit.circuits.length} 電路
@@ -356,6 +382,7 @@ export default function OrganizationsPage() {
                             <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-primary-dim)]/50 rounded text-sm">
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
+                                <span className="text-xs font-mono text-[var(--color-badge-blue-text)]">x{d.quantity || 1}</span>
                                 <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
                               <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
@@ -377,6 +404,7 @@ export default function OrganizationsPage() {
                             <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-warning-dim)] rounded text-sm">
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
+                                <span className="text-xs font-mono text-[var(--color-warning)]">x{d.quantity || 1}</span>
                                 <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
                               <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
@@ -460,7 +488,7 @@ export default function OrganizationsPage() {
             <label className="block text-sm font-medium mb-1">單位類型 *</label>
             <div className="flex gap-2">
               {Object.entries(UNIT_TYPE_LABELS).map(([k, v]) => (
-                <button key={k} onClick={() => setFormType(k as UnitType)}
+                <button key={k} onClick={() => { setFormType(k as UnitType); setFormDeviceQty(getDefaultQtyMap(k as UnitType)) }}
                   className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formType === k
                     ? 'bg-[var(--color-primary-dim)] border-[var(--color-primary)] text-[var(--color-badge-blue-text)] font-medium'
                     : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
@@ -470,28 +498,41 @@ export default function OrganizationsPage() {
             </div>
           </div>
 
-          {/* Auto-create devices preview */}
-          {!editingId && (
-            <div className="bg-[var(--color-table-header)] rounded-lg p-3">
-              <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2 flex items-center gap-1">
-                <Shield className="w-3.5 h-3.5" /> 將自動建立以下設備
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="font-medium text-[var(--color-badge-blue-text)] mb-1"><Lock className="w-3 h-3 inline mr-1" />內網</div>
-                  {(formType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES).map((dt) => (
-                    <div key={dt} className="text-[var(--color-text-muted)] pl-4">• {dt}</div>
-                  ))}
+          {/* Device quantity inputs */}
+          <div className="bg-[var(--color-table-header)] rounded-lg p-3">
+            <p className="text-xs font-medium text-[var(--color-text-muted)] mb-3 flex items-center gap-1">
+              <Shield className="w-3.5 h-3.5" /> {editingId ? '設備數量設定' : '自動建立設備數量'}
+            </p>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              {(['internal', 'external'] as const).map((zone) => (
+                <div key={zone}>
+                  <div className="font-medium mb-2 flex items-center gap-1">
+                    {zone === 'internal'
+                      ? <><Lock className="w-3 h-3 text-[var(--color-primary)]" /><span className="text-[var(--color-badge-blue-text)]">內網</span></>
+                      : <><Globe className="w-3 h-3 text-[var(--color-warning)]" /><span className="text-[var(--color-warning)]">外網</span></>
+                    }
+                  </div>
+                  <div className="space-y-1.5">
+                    {(formType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES).map((dt) => {
+                      const key = `${zone}_${dt}`
+                      return (
+                        <div key={key} className="flex items-center justify-between gap-2">
+                          <span className="text-[var(--color-text-muted)]">{dt}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formDeviceQty[key] ?? 1}
+                            onChange={(e) => setFormDeviceQty({ ...formDeviceQty, [key]: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className="w-16 px-2 py-1 border border-[var(--color-border)] rounded text-center text-sm"
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-                <div>
-                  <div className="font-medium text-[var(--color-warning)] mb-1"><Globe className="w-3 h-3 inline mr-1" />外網</div>
-                  {(formType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES).map((dt) => (
-                    <div key={dt} className="text-[var(--color-text-muted)] pl-4">• {dt}</div>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Circuits */}
           <div>
