@@ -484,10 +484,25 @@ export default function NetworkAvailabilityCalendar() {
                     {dayEvents.length > 0 && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-weekend-sun)]' : 'text-[var(--color-warning)]'}`} />}
                   </div>
                   <div className="space-y-0.5">
-                    {dayEvents.slice(0, 2).map((e) => (
-                      <div key={e.id} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>{e.asset_name}</div>
-                    ))}
-                    {dayEvents.length > 2 && <div className="text-xs text-[var(--color-text-muted)] px-1">+{dayEvents.length - 2}</div>}
+                    {(() => {
+                      // 以單位為主顯示，不顯示個別設備
+                      const unitMap = new Map<string, EventPlanType>()
+                      dayEvents.forEach((e) => {
+                        const asset = networkAssets.find((a) => a.id === e.asset_id)
+                        const unitName = asset?.unit || '未知'
+                        const existing = unitMap.get(unitName)
+                        if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
+                      })
+                      const unitEntries = [...unitMap.entries()]
+                      return (
+                        <>
+                          {unitEntries.slice(0, 2).map(([unit, planType]) => (
+                            <div key={unit} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[planType] }}>{unit}</div>
+                          ))}
+                          {unitEntries.length > 2 && <div className="text-xs text-[var(--color-text-muted)] px-1">+{unitEntries.length - 2}</div>}
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
               )
