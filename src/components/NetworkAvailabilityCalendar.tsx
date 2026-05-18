@@ -139,7 +139,7 @@ export default function NetworkAvailabilityCalendar() {
   const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
   const [circuits, setCircuits] = useState<Circuit[]>([])
 
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingIds, setEditingIds] = useState<string[]>([])  // batch edit: all event IDs in the group
   const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device'>('unit')
   const [formSelectedUnit, setFormSelectedUnit] = useState('')
   const [formSelectedAssets, setFormSelectedAssets] = useState<string[]>([])
@@ -356,7 +356,7 @@ export default function NetworkAvailabilityCalendar() {
   }, [currentMonth, circuitEvents, hoursPerDevice, monthStart, monthEnd, circuits])
 
   function openNewEvent(date?: Date) {
-    setEditingId(null)
+    setEditingIds([])
     setFormSelectMode('unit')
     setFormSelectedUnit('')
     setFormSelectedAssets([])
@@ -370,17 +370,19 @@ export default function NetworkAvailabilityCalendar() {
     setShowModal(true)
   }
 
-  function openEditEvent(e: DowntimeEvent) {
-    setEditingId(e.id)
-    setFormSelectMode('device')
-    setFormSelectedUnit('')
-    setFormSelectedAssets([e.asset_id])
-    setFormEventType(e.title)
-    setFormPlanType(e.plan_type)
-    setFormTitle(e.title)
-    setFormDesc(e.description)
-    setFormStart(e.start_time.includes('T') ? e.start_time.slice(0, 16) : e.start_time)
-    setFormEnd(e.end_time.includes('T') ? e.end_time.slice(0, 16) : e.end_time)
+  // Open edit for a group of events (same unit + same event signature)
+  function openEditEventGroup(groupEvents: DowntimeEvent[], unitName: string) {
+    setEditingIds(groupEvents.map((e) => e.id))
+    const first = groupEvents[0]
+    setFormSelectMode('unit')
+    setFormSelectedUnit(unitName)
+    setFormSelectedAssets(groupEvents.map((e) => e.asset_id))
+    setFormEventType(first.title)
+    setFormPlanType(first.plan_type)
+    setFormTitle(first.title)
+    setFormDesc(first.description)
+    setFormStart(first.start_time.includes('T') ? first.start_time.slice(0, 16) : first.start_time)
+    setFormEnd(first.end_time.includes('T') ? first.end_time.slice(0, 16) : first.end_time)
     setShowModal(true)
   }
 
@@ -388,20 +390,26 @@ export default function NetworkAvailabilityCalendar() {
     if (formSelectedAssets.length === 0 || !formTitle || !formStart || !formEnd) return
     setSaving(true)
 
-    if (editingId) {
-      // Update single event
-      const asset = networkAssets.find((a) => a.id === formSelectedAssets[0])
-      const { error } = await supabase.from('downtime_events').update({
-        asset_id: formSelectedAssets[0],
-        asset_name: asset?.name || '',
-        event_type: formEventType,
-        plan_type: formPlanType,
-        title: formTitle,
-        description: formDesc,
-        start_time: formStart,
-        end_time: formEnd,
-      }).eq('id', editingId)
-      if (error) { console.error('Failed to update event:', error); setSaving(false); return }
+    if (editingIds.length > 0) {
+      // Batch edit: delete old events, insert new ones for selected assets
+      const { error: delErr } = await supabase.from('downtime_events').delete().in('id', editingIds)
+      if (delErr) { console.error('Failed to delete old events:', delErr); setSaving(false); return }
+      const rows = formSelectedAssets.map((assetId) => {
+        const asset = networkAssets.find((a) => a.id === assetId)
+        return {
+          asset_type: 'network',
+          asset_id: assetId,
+          asset_name: asset?.name || '',
+          event_type: formEventType,
+          plan_type: formPlanType,
+          title: formTitle,
+          description: formDesc,
+          start_time: formStart,
+          end_time: formEnd,
+        }
+      })
+      const { error } = await supabase.from('downtime_events').insert(rows)
+      if (error) { console.error('Failed to save events:', error); setSaving(false); return }
     } else {
       // Insert new events
       const rows = formSelectedAssets.map((assetId) => {
@@ -426,6 +434,13 @@ export default function NetworkAvailabilityCalendar() {
     setShowModal(false)
   }
 
+  // Delete a group of events by IDs
+  async function deleteEventGroup(ids: string[]) {
+    const { error } = await supabase.from('downtime_events').delete().in('id', ids)
+    if (error) { console.error('Failed to delete events:', error); return }
+    await fetchDowntimeEvents()
+  }
+
   function handleUnitChange(unit: string) {
     setFormSelectedUnit(unit)
     if (unit) {
@@ -441,13 +456,9 @@ export default function NetworkAvailabilityCalendar() {
     )
   }
 
+  // Single delete kept for backward compat (unused in sidebar now)
   async function deleteEvent(id: string) {
-    const { error } = await supabase.from('downtime_events').delete().eq('id', id)
-    if (error) {
-      console.error('Failed to delete event:', error)
-      return
-    }
-    await fetchDowntimeEvents()
+    await deleteEventGroup([id])
   }
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
@@ -839,7 +850,7 @@ export default function NetworkAvailabilityCalendar() {
         })()}
       </div>
 
-      {/* Day detail sidebar — grouped by unit */}
+      {/* Day detail sidebar — grouped by unit + event signature */}
       {selectedDate && (
         <div className="w-80 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 h-fit sticky top-6">
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
@@ -850,37 +861,42 @@ export default function NetworkAvailabilityCalendar() {
           ) : (
             <div className="space-y-3">
               {(() => {
-                const unitGroups = new Map<string, DowntimeEvent[]>()
+                // Group by unit + event signature (title + start + end + plan_type)
+                interface UnitEventGroup { unit: string; events: DowntimeEvent[]; key: string }
+                const groupMap = new Map<string, UnitEventGroup>()
                 selectedDayEvents.forEach((e) => {
                   const asset = networkAssets.find((a) => a.id === e.asset_id)
                   const unitName = asset?.unit || '未知'
-                  if (!unitGroups.has(unitName)) unitGroups.set(unitName, [])
-                  unitGroups.get(unitName)!.push(e)
+                  const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+                  if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, events: [], key: sig })
+                  groupMap.get(sig)!.events.push(e)
                 })
-                return [...unitGroups.entries()].map(([unit, unitEvents]) => (
-                  <div key={unit} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
-                    <div className="px-3 py-2 bg-[var(--color-table-header)] text-sm font-semibold">{unit}</div>
-                    <div className="divide-y divide-[var(--color-border)]">
-                      {unitEvents.map((e) => (
-                        <div key={e.id} className="px-3 py-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
-                              {PLAN_TYPE_LABELS[e.plan_type]}
-                            </span>
-                            <div className="flex gap-2">
-                              <button onClick={() => openEditEvent(e)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
-                              <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
-                            </div>
+                return [...groupMap.values()].map(({ unit, events: grpEvents, key }) => {
+                  const first = grpEvents[0]
+                  const ids = grpEvents.map((e) => e.id)
+                  return (
+                    <div key={key} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 bg-[var(--color-table-header)] flex items-center justify-between">
+                        <span className="text-sm font-semibold">{unit}</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">{grpEvents.length} 台設備</span>
+                      </div>
+                      <div className="px-3 py-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[first.plan_type] }}>
+                            {PLAN_TYPE_LABELS[first.plan_type]}
+                          </span>
+                          <div className="flex gap-2">
+                            <button onClick={() => openEditEventGroup(grpEvents, unit)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
+                            <button onClick={() => deleteEventGroup(ids)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
                           </div>
-                          <div className="font-medium text-sm mt-1">{e.title}</div>
-                          <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
-                          <div className="text-xs text-[var(--color-text-muted)]">{e.start_time.replace('T', ' ')} ~ {e.end_time.replace('T', ' ')}</div>
-                          {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
                         </div>
-                      ))}
+                        <div className="font-medium text-sm mt-1">{first.title}</div>
+                        <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.start_time.replace('T', ' ')} ~ {first.end_time.replace('T', ' ')}</div>
+                        {first.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.description}</div>}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               })()}
             </div>
           )}
@@ -889,7 +905,7 @@ export default function NetworkAvailabilityCalendar() {
       )}
 
       {/* New Event Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingId ? '編輯網路事件' : '新增網路事件'}>
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingIds.length > 0 ? '編輯網路事件' : '新增網路事件'}>
         <div className="space-y-4">
           {/* 選擇方式 toggle */}
           <div>
@@ -1015,7 +1031,7 @@ export default function NetworkAvailabilityCalendar() {
             <button onClick={saveEvent} disabled={formSelectedAssets.length === 0 || saving}
               className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${formSelectedAssets.length > 0 && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {editingId ? '更新' : `儲存${formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}`}
+              {editingIds.length > 0 ? '更新' : `儲存${formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}`}
             </button>
           </div>
         </div>
