@@ -273,6 +273,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     const { error } = await supabase.from('downtime_events').delete().eq('id', id)
     if (!error) {
       await fetchEvents()
+      setSelectedDate(null)
     }
   }
 

@@ -193,6 +193,7 @@ export default function CalendarPage() {
     await fetchEvents()
     setSaving(false)
     setShowEventModal(false)
+    setSelectedDate(null)
   }
 
   function openNewLeave(date?: Date) {

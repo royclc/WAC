@@ -456,6 +456,7 @@ export default function NetworkAvailabilityCalendar() {
       if (error) { console.error(error); return }
     }
     await Promise.all([fetchDowntimeEvents(), fetchCircuitEvents()])
+    setSelectedDate(null)
   }
 
   function handleUnitChange(unit: string) {

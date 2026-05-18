@@ -185,6 +185,8 @@ export default function MaintenancePage() {
     if (error) {
       console.error('Failed to delete event:', error)
       setEvents(prev)
+    } else {
+      setSelectedDate(null)
     }
   }
 
