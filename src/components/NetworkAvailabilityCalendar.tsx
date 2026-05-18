@@ -139,6 +139,7 @@ export default function NetworkAvailabilityCalendar() {
   const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
   const [circuits, setCircuits] = useState<Circuit[]>([])
 
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device'>('unit')
   const [formSelectedUnit, setFormSelectedUnit] = useState('')
   const [formSelectedAssets, setFormSelectedAssets] = useState<string[]>([])
@@ -355,6 +356,7 @@ export default function NetworkAvailabilityCalendar() {
   }, [currentMonth, circuitEvents, hoursPerDevice, monthStart, monthEnd, circuits])
 
   function openNewEvent(date?: Date) {
+    setEditingId(null)
     setFormSelectMode('unit')
     setFormSelectedUnit('')
     setFormSelectedAssets([])
@@ -368,14 +370,29 @@ export default function NetworkAvailabilityCalendar() {
     setShowModal(true)
   }
 
+  function openEditEvent(e: DowntimeEvent) {
+    setEditingId(e.id)
+    setFormSelectMode('device')
+    setFormSelectedUnit('')
+    setFormSelectedAssets([e.asset_id])
+    setFormEventType(e.title)
+    setFormPlanType(e.plan_type)
+    setFormTitle(e.title)
+    setFormDesc(e.description)
+    setFormStart(e.start_time.includes('T') ? e.start_time.slice(0, 16) : e.start_time)
+    setFormEnd(e.end_time.includes('T') ? e.end_time.slice(0, 16) : e.end_time)
+    setShowModal(true)
+  }
+
   async function saveEvent() {
     if (formSelectedAssets.length === 0 || !formTitle || !formStart || !formEnd) return
     setSaving(true)
-    const rows = formSelectedAssets.map((assetId) => {
-      const asset = networkAssets.find((a) => a.id === assetId)
-      return {
-        asset_type: 'network',
-        asset_id: assetId,
+
+    if (editingId) {
+      // Update single event
+      const asset = networkAssets.find((a) => a.id === formSelectedAssets[0])
+      const { error } = await supabase.from('downtime_events').update({
+        asset_id: formSelectedAssets[0],
         asset_name: asset?.name || '',
         event_type: formEventType,
         plan_type: formPlanType,
@@ -383,13 +400,26 @@ export default function NetworkAvailabilityCalendar() {
         description: formDesc,
         start_time: formStart,
         end_time: formEnd,
-      }
-    })
-    const { error } = await supabase.from('downtime_events').insert(rows)
-    if (error) {
-      console.error('Failed to save events:', error)
-      setSaving(false)
-      return
+      }).eq('id', editingId)
+      if (error) { console.error('Failed to update event:', error); setSaving(false); return }
+    } else {
+      // Insert new events
+      const rows = formSelectedAssets.map((assetId) => {
+        const asset = networkAssets.find((a) => a.id === assetId)
+        return {
+          asset_type: 'network',
+          asset_id: assetId,
+          asset_name: asset?.name || '',
+          event_type: formEventType,
+          plan_type: formPlanType,
+          title: formTitle,
+          description: formDesc,
+          start_time: formStart,
+          end_time: formEnd,
+        }
+      })
+      const { error } = await supabase.from('downtime_events').insert(rows)
+      if (error) { console.error('Failed to save events:', error); setSaving(false); return }
     }
     await fetchDowntimeEvents()
     setSaving(false)
@@ -809,7 +839,7 @@ export default function NetworkAvailabilityCalendar() {
         })()}
       </div>
 
-      {/* Day detail sidebar */}
+      {/* Day detail sidebar — grouped by unit */}
       {selectedDate && (
         <div className="w-80 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 h-fit sticky top-6">
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
@@ -819,20 +849,39 @@ export default function NetworkAvailabilityCalendar() {
             </div>
           ) : (
             <div className="space-y-3">
-              {selectedDayEvents.map((e) => (
-                <div key={e.id} className="p-3 rounded-lg border border-[var(--color-border)]">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
-                      {PLAN_TYPE_LABELS[e.plan_type]}
-                    </span>
-                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
+              {(() => {
+                const unitGroups = new Map<string, DowntimeEvent[]>()
+                selectedDayEvents.forEach((e) => {
+                  const asset = networkAssets.find((a) => a.id === e.asset_id)
+                  const unitName = asset?.unit || '未知'
+                  if (!unitGroups.has(unitName)) unitGroups.set(unitName, [])
+                  unitGroups.get(unitName)!.push(e)
+                })
+                return [...unitGroups.entries()].map(([unit, unitEvents]) => (
+                  <div key={unit} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+                    <div className="px-3 py-2 bg-[var(--color-table-header)] text-sm font-semibold">{unit}</div>
+                    <div className="divide-y divide-[var(--color-border)]">
+                      {unitEvents.map((e) => (
+                        <div key={e.id} className="px-3 py-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
+                              {PLAN_TYPE_LABELS[e.plan_type]}
+                            </span>
+                            <div className="flex gap-2">
+                              <button onClick={() => openEditEvent(e)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
+                              <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
+                            </div>
+                          </div>
+                          <div className="font-medium text-sm mt-1">{e.title}</div>
+                          <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
+                          <div className="text-xs text-[var(--color-text-muted)]">{e.start_time.replace('T', ' ')} ~ {e.end_time.replace('T', ' ')}</div>
+                          {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="font-medium text-sm mt-1">{e.title}</div>
-                  <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
-                  <div className="text-xs text-[var(--color-text-muted)]">{e.start_time.replace('T', ' ')} ~ {e.end_time.replace('T', ' ')}</div>
-                  {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
-                </div>
-              ))}
+                ))
+              })()}
             </div>
           )}
           <button onClick={() => openNewEvent(selectedDate)} className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">+ 新增事件</button>
@@ -840,7 +889,7 @@ export default function NetworkAvailabilityCalendar() {
       )}
 
       {/* New Event Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="新增網路事件">
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingId ? '編輯網路事件' : '新增網路事件'}>
         <div className="space-y-4">
           {/* 選擇方式 toggle */}
           <div>
@@ -966,7 +1015,7 @@ export default function NetworkAvailabilityCalendar() {
             <button onClick={saveEvent} disabled={formSelectedAssets.length === 0 || saving}
               className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${formSelectedAssets.length > 0 && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              儲存{formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}
+              {editingId ? '更新' : `儲存${formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}`}
             </button>
           </div>
         </div>
