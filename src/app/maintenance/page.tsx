@@ -141,8 +141,8 @@ export default function MaintenancePage() {
               onClick={() => setFilterCategory('all')}
               className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                 filterCategory === 'all'
-                  ? 'bg-gray-800 text-white border-gray-800'
-                  : 'border-[var(--color-border)] hover:bg-gray-50'
+                  ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                  : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'
               }`}
             >
               全部
@@ -154,7 +154,7 @@ export default function MaintenancePage() {
                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                   filterCategory === key
                     ? 'text-white border-transparent'
-                    : 'border-[var(--color-border)] hover:bg-gray-50'
+                    : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'
                 }`}
                 style={filterCategory === key ? { backgroundColor: color } : undefined}
               >
@@ -166,21 +166,21 @@ export default function MaintenancePage() {
           {/* Calendar */}
           <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden mb-6">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-              <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-3">
                 <h2 className="text-lg font-semibold">{formatMonthTitle(currentMonth)}</h2>
                 <YearMonthPicker currentDate={currentMonth} onChange={setCurrentMonth} />
               </div>
-              <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
 
             <div className="grid grid-cols-7 border-b border-[var(--color-border)]">
               {WEEKDAYS.map((day, i) => (
-                <div key={day} className={`text-center text-sm font-medium py-3 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-[var(--color-text-muted)]'}`}>
+                <div key={day} className={`text-center text-sm font-medium py-3 ${i === 0 ? 'text-[var(--color-weekend-sun)]' : i === 6 ? 'text-[var(--color-weekend-sat)]' : 'text-[var(--color-text-muted)]'}`}>
                   {day}
                 </div>
               ))}
@@ -199,11 +199,11 @@ export default function MaintenancePage() {
                     key={idx}
                     onClick={() => setSelectedDate(date)}
                     className={`min-h-[100px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${
-                      !inMonth ? 'bg-gray-50' : 'hover:bg-blue-50/30'
+                      !inMonth ? 'bg-[var(--color-bg-elevated)]' : 'hover:bg-[var(--color-primary-dim)]'
                     } ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-gray-300' : ''} ${dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : ''}`}>
+                      <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${dayOfWeek === 0 ? 'text-[var(--color-weekend-sun)]' : dayOfWeek === 6 ? 'text-[var(--color-weekend-sat)]' : ''}`}>
                         {format(date, 'd')}
                       </span>
                       {dayEvents.length > 0 && (
@@ -236,20 +236,20 @@ export default function MaintenancePage() {
             <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] p-4">
               <h3 className="font-semibold mb-3">{formatMonthTitle(currentMonth)} — 保養統計</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-3 bg-[var(--color-bg-elevated)] rounded-lg">
                   <div className="text-2xl font-bold">{monthlySummary.total}</div>
                   <div className="text-xs text-[var(--color-text-muted)]">總保養項目</div>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{monthlySummary.completed}</div>
+                <div className="text-center p-3 bg-[var(--color-badge-green)] rounded-lg">
+                  <div className="text-2xl font-bold text-[var(--color-badge-green-text)]">{monthlySummary.completed}</div>
                   <div className="text-xs text-[var(--color-text-muted)]">已完成</div>
                 </div>
                 <div className="text-center p-3 bg-amber-50 rounded-lg">
                   <div className="text-2xl font-bold text-amber-600">{monthlySummary.total - monthlySummary.completed}</div>
                   <div className="text-xs text-[var(--color-text-muted)]">待完成</div>
                 </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
+                <div className="text-center p-3 bg-[var(--color-primary-dim)] rounded-lg">
+                  <div className="text-2xl font-bold text-[var(--color-primary)]">
                     {monthlySummary.total > 0 ? Math.round((monthlySummary.completed / monthlySummary.total) * 100) : 0}%
                   </div>
                   <div className="text-xs text-[var(--color-text-muted)]">完成率</div>
@@ -258,7 +258,7 @@ export default function MaintenancePage() {
               {monthlySummary.byCategory.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {monthlySummary.byCategory.map((c) => (
-                    <span key={c.key} className="text-xs px-2 py-1 rounded-full bg-gray-100">
+                    <span key={c.key} className="text-xs px-2 py-1 rounded-full bg-[var(--color-bg-elevated)]">
                       {c.label}: {c.completed}/{c.total}
                     </span>
                   ))}
@@ -320,7 +320,7 @@ export default function MaintenancePage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                         <th className="text-left px-4 py-3 font-medium">類別</th>
                         <th className="text-left px-4 py-3 font-medium">保養項目</th>
                         <th className="text-left px-4 py-3 font-medium">日期</th>
@@ -331,7 +331,7 @@ export default function MaintenancePage() {
                     </thead>
                     <tbody>
                       {quarterEvents.map((e) => (
-                        <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                        <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                           <td className="px-4 py-3">
                             <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: CATEGORIES[e.category].color }}>
                               {CATEGORIES[e.category].label}
@@ -341,7 +341,7 @@ export default function MaintenancePage() {
                           <td className="px-4 py-3 font-mono text-xs">{e.event_date}</td>
                           <td className="px-4 py-3">{e.contractor || '-'}</td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${e.is_completed ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${e.is_completed ? 'bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)]' : 'bg-[var(--color-badge-yellow)] text-[var(--color-badge-yellow-text)]'}`}>
                               {e.is_completed ? '已完成' : '待完成'}
                             </span>
                           </td>
@@ -376,11 +376,11 @@ export default function MaintenancePage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => toggleComplete(e.id)}
-                          className={`text-xs px-2 py-0.5 rounded border ${e.is_completed ? 'bg-green-50 text-green-700 border-green-200' : 'border-[var(--color-border)] hover:bg-gray-50'}`}
+                          className={`text-xs px-2 py-0.5 rounded border ${e.is_completed ? 'bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)] border-[var(--color-border)]' : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}
                         >
                           {e.is_completed ? '已完成' : '完成'}
                         </button>
-                        <button onClick={() => deleteEvent(e.id)} className="p-0.5 hover:text-red-500">
+                        <button onClick={() => deleteEvent(e.id)} className="p-0.5 hover:text-[var(--color-danger)]">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -394,7 +394,7 @@ export default function MaintenancePage() {
             )}
             <button
               onClick={() => openNewEvent(selectedDate)}
-              className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-gray-50"
+              className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]"
             >
               + 新增保養
             </button>
@@ -430,7 +430,7 @@ export default function MaintenancePage() {
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveEvent} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>

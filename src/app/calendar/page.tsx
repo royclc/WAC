@@ -206,7 +206,7 @@ export default function CalendarPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => openNewLeave(selectedDate || undefined)}
-                className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50 flex items-center gap-1"
+                className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1"
               >
                 <FileText className="w-4 h-4" />
                 請假
@@ -248,7 +248,7 @@ export default function CalendarPage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                         <th className="text-left px-4 py-3 font-medium">工作名稱</th>
                         <th className="text-left px-4 py-3 font-medium">日期</th>
                         <th className="text-left px-4 py-3 font-medium">時間</th>
@@ -258,7 +258,7 @@ export default function CalendarPage() {
                     </thead>
                     <tbody>
                       {monthEvents.map((e) => (
-                        <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-gray-50 cursor-pointer" onClick={() => openEditEvent(e.id)}>
+                        <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)] cursor-pointer" onClick={() => openEditEvent(e.id)}>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
@@ -293,7 +293,7 @@ export default function CalendarPage() {
             {selectedDayEvents.map((ev) => (
               <div
                 key={ev.id}
-                className="mb-3 p-3 rounded-lg border border-[var(--color-border)] cursor-pointer hover:bg-gray-50"
+                className="mb-3 p-3 rounded-lg border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-hover)]"
                 onClick={() => openEditEvent(ev.id)}
               >
                 <div className="flex items-center gap-2 mb-1">
@@ -316,7 +316,7 @@ export default function CalendarPage() {
             ))}
 
             {selectedDayLeaves.map((lv) => (
-              <div key={lv.id} className="mb-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+              <div key={lv.id} className="mb-3 p-3 rounded-lg bg-[var(--color-bg-elevated)] border border-[var(--color-border)]">
                 <div className="text-sm font-medium">{lv.user_name} — {LEAVE_TYPES[lv.leave_type]}</div>
                 {lv.is_half_day && (
                   <div className="text-xs text-[var(--color-text-muted)]">
@@ -330,13 +330,13 @@ export default function CalendarPage() {
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => openNewEvent(selectedDate)}
-                className="flex-1 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-gray-50"
+                className="flex-1 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]"
               >
                 + 工作
               </button>
               <button
                 onClick={() => openNewLeave(selectedDate)}
-                className="flex-1 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-gray-50"
+                className="flex-1 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]"
               >
                 + 請假
               </button>
@@ -400,7 +400,7 @@ export default function CalendarPage() {
                   className={`px-3 py-1 text-sm rounded-full border ${
                     formAssignees.includes(name)
                       ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                      : 'border-[var(--color-border)] hover:bg-gray-50'
+                      : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'
                   }`}
                 >
                   {name}
@@ -410,12 +410,12 @@ export default function CalendarPage() {
           </div>
           <div className="flex gap-2 pt-2">
             {editingEvent && (
-              <button onClick={() => deleteEvent(editingEvent.id)} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-red-50 flex items-center gap-1">
+              <button onClick={() => deleteEvent(editingEvent.id)} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1">
                 <Trash2 className="w-4 h-4" /> 刪除
               </button>
             )}
             <div className="flex-1" />
-            <button onClick={() => setShowEventModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowEventModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveEvent} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>
@@ -458,7 +458,7 @@ export default function CalendarPage() {
             <input value={leaveNote} onChange={(e) => setLeaveNote(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowLeaveModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowLeaveModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveLeave} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>

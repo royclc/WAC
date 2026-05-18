@@ -4,12 +4,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Calendar,
-  Server,
   Wifi,
   Users,
   HardDrive,
   LogOut,
-  LayoutDashboard,
   Wrench,
   Building2,
   Tag,
@@ -17,6 +15,8 @@ import {
   Cable,
   Landmark,
   BarChart3,
+  Activity,
+  Server,
 } from 'lucide-react'
 
 const navItems = [
@@ -46,29 +46,43 @@ export default function Sidebar({ userRole = 'user', userName = '使用者' }: S
   const pathname = usePathname()
 
   return (
-    <aside className="w-60 bg-[var(--color-card)] border-r border-[var(--color-border)] flex flex-col h-screen fixed left-0 top-0">
+    <aside className="w-60 bg-[var(--color-sidebar)] border-r border-[var(--color-border)] flex flex-col h-screen fixed left-0 top-0">
+      {/* Brand */}
       <div className="p-4 border-b border-[var(--color-border)]">
-        <h1 className="text-lg font-bold text-[var(--color-primary)]">
-          <LayoutDashboard className="inline-block w-5 h-5 mr-2" />
-          MAC 系統
-        </h1>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-dim)] flex items-center justify-center">
+            <Server className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-[var(--color-text)] tracking-wide">MAC 系統</h1>
+            <p className="text-[10px] text-[var(--color-text-dim)] tracking-wider">DATA CENTER MGMT</p>
+          </div>
+        </div>
+        {/* Status indicator */}
+        <div className="flex items-center gap-1.5 mt-3 px-1">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-[10px] text-emerald-400 font-medium tracking-wider">SYSTEM ONLINE</span>
+        </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
-        <p className="text-xs text-[var(--color-text-muted)] px-3 py-2 uppercase tracking-wider">功能</p>
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        <p className="text-[10px] text-[var(--color-text-dim)] px-3 py-2 uppercase tracking-[0.15em] font-semibold">功能</p>
         {navItems.map((item) => {
           const active = pathname.startsWith(item.href)
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
                 active
-                  ? 'bg-blue-50 text-[var(--color-primary)] font-medium'
-                  : 'text-[var(--color-text-muted)] hover:bg-gray-50 hover:text-[var(--color-text)]'
+                  ? 'bg-[var(--color-sidebar-active)] text-[var(--color-primary-text)] font-medium border-l-2 border-[var(--color-primary)]'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-text)]'
               }`}
             >
-              <item.icon className="w-4 h-4" />
+              <item.icon className={`w-4 h-4 ${active ? 'text-[var(--color-primary)]' : ''}`} />
               {item.label}
             </Link>
           )
@@ -76,20 +90,20 @@ export default function Sidebar({ userRole = 'user', userName = '使用者' }: S
 
         {userRole === 'admin' && (
           <>
-            <p className="text-xs text-[var(--color-text-muted)] px-3 py-2 mt-4 uppercase tracking-wider">管理</p>
+            <p className="text-[10px] text-[var(--color-text-dim)] px-3 py-2 mt-4 uppercase tracking-[0.15em] font-semibold">管理</p>
             {adminItems.map((item) => {
               const active = pathname.startsWith(item.href)
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
                     active
-                      ? 'bg-blue-50 text-[var(--color-primary)] font-medium'
-                      : 'text-[var(--color-text-muted)] hover:bg-gray-50 hover:text-[var(--color-text)]'
+                      ? 'bg-[var(--color-sidebar-active)] text-[var(--color-primary-text)] font-medium border-l-2 border-[var(--color-primary)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-text)]'
                   }`}
                 >
-                  <item.icon className="w-4 h-4" />
+                  <item.icon className={`w-4 h-4 ${active ? 'text-[var(--color-primary)]' : ''}`} />
                   {item.label}
                 </Link>
               )
@@ -100,8 +114,13 @@ export default function Sidebar({ userRole = 'user', userName = '使用者' }: S
 
       <div className="p-3 border-t border-[var(--color-border)]">
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm text-[var(--color-text-muted)]">{userName}</span>
-          <button className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-[var(--color-primary-dim)] flex items-center justify-center">
+              <span className="text-[10px] font-bold text-[var(--color-primary)]">{userName[0]}</span>
+            </div>
+            <span className="text-sm text-[var(--color-text-muted)]">{userName}</span>
+          </div>
+          <button className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)] transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>

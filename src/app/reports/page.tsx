@@ -494,6 +494,13 @@ function DonutChart({ value, size = 120, strokeWidth = 14, color1 = '#6366f1', c
   )
 }
 
+const DONUT_COLORS: [string, string][] = [
+  ['#7c3aed', '#38bdf8'],  // 季度: 紫 + 天藍
+  ['#059669', '#6ee7b7'],  // 月1: 綠 + 淺綠
+  ['#ea580c', '#fdba74'],  // 月2: 橘 + 淺橘
+  ['#2563eb', '#93c5fd'],  // 月3: 藍 + 淺藍
+]
+
 function DonutChartSection({ data, title }: { data: ChartData[]; title: string }) {
   const totalPlanned = data.reduce((s, d) => s + d.planned, 0)
   const totalUnplanned = data.reduce((s, d) => s + d.unplanned, 0)
@@ -509,7 +516,7 @@ function DonutChartSection({ data, title }: { data: ChartData[]; title: string }
         {/* Season total donut */}
         <div className="flex flex-col items-center gap-2 min-w-[160px]">
           <div className="relative">
-            <DonutChart value={unplannedPct} size={140} strokeWidth={18} color1="#7c3aed" color2="#38bdf8" />
+            <DonutChart value={unplannedPct} size={140} strokeWidth={18} color1={DONUT_COLORS[0][0]} color2={DONUT_COLORS[0][1]} />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold">{availablePct}%</span>
               <span className="text-xs text-[var(--color-text-muted)]">可用率</span>
@@ -519,10 +526,11 @@ function DonutChartSection({ data, title }: { data: ChartData[]; title: string }
         </div>
 
         {/* Per-month donuts */}
-        {data.map((d) => {
+        {data.map((d, idx) => {
           const mUnplannedPct = d.totalHours > 0 ? Math.round((d.unplanned / d.totalHours) * 10000) / 100 : 0
           const mAvailablePct = d.totalHours > 0 ? Math.round(((d.totalHours - d.unplanned) / d.totalHours) * 10000) / 100 : 100
           const hasData = d.totalHours > 0
+          const [c1, c2] = DONUT_COLORS[(idx + 1) % DONUT_COLORS.length]
 
           return (
             <div key={d.month} className="flex flex-col items-center gap-2 min-w-[120px]">
@@ -531,8 +539,8 @@ function DonutChartSection({ data, title }: { data: ChartData[]; title: string }
                   value={hasData ? mUnplannedPct : 0}
                   size={100}
                   strokeWidth={12}
-                  color1="#7c3aed"
-                  color2="#38bdf8"
+                  color1={c1}
+                  color2={c2}
                 />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   {hasData ? (
@@ -702,7 +710,8 @@ export default function ReportsPage() {
   const networkChartData: ChartData[] = useMemo(() => {
     return quarterPeriods.map((period) => {
       const isPast = period.end < now || (period.start <= now && period.end >= now)
-      if (!isPast) return { month: period.label.split('~')[0], planned: 0, unplanned: 0, totalHours: 0 }
+      const displayMonth = `${((period.start.getMonth() + 2) % 12) || 12}月`
+      if (!isPast) return { month: displayMonth, planned: 0, unplanned: 0, totalHours: 0 }
 
       let planned = 0
       let unplanned = 0
@@ -713,7 +722,7 @@ export default function ReportsPage() {
         unplanned += stats.unplannedHours
         totalH += stats.hoursPerDevice * stats.totalCount
       })
-      return { month: period.label.split('~')[0], planned, unplanned, totalHours: totalH }
+      return { month: displayMonth, planned, unplanned, totalHours: totalH }
     })
   }, [quarterPeriods, deviceGroups, events])
 
@@ -721,7 +730,8 @@ export default function ReportsPage() {
   const hardwareChartData: ChartData[] = useMemo(() => {
     return quarterPeriods.map((period) => {
       const isPast = period.end < now || (period.start <= now && period.end >= now)
-      if (!isPast) return { month: period.label.split('~')[0], planned: 0, unplanned: 0, totalHours: 0 }
+      const displayMonth = `${((period.start.getMonth() + 2) % 12) || 12}月`
+      if (!isPast) return { month: displayMonth, planned: 0, unplanned: 0, totalHours: 0 }
 
       let planned = 0
       let unplanned = 0
@@ -732,7 +742,7 @@ export default function ReportsPage() {
         unplanned += stats[0].unplannedHours
         totalH += stats[0].totalHours
       })
-      return { month: period.label.split('~')[0], planned, unplanned, totalHours: totalH }
+      return { month: displayMonth, planned, unplanned, totalHours: totalH }
     })
   }, [quarterPeriods])
 
@@ -922,6 +932,106 @@ export default function ReportsPage() {
     saveAs(blob, `硬體統計報表_${rocYear}年第${quarter}季.docx`)
   }
 
+  // ═══ Word export: Fiber (光纖數據線路及設備維運服務報告) ═══
+  async function exportFiberWord() {
+    function buildCircuitDocxTable(summaries: CircuitEventSummary[]): Table {
+      const rows: TableRow[] = []
+
+      // Header
+      rows.push(new TableRow({
+        children: [
+          docxCell('序號', { bold: true, alignment: AlignmentType.CENTER }),
+          docxCell('單位', { bold: true }),
+          docxCell('電路編號', { bold: true }),
+          docxCell('IP Address', { bold: true }),
+          docxCell('停止服務期間', { bold: true }),
+          docxCell('中斷時數總計(hrs)', { bold: true, alignment: AlignmentType.CENTER }),
+          docxCell('原因', { bold: true }),
+        ],
+      }))
+
+      if (summaries.length === 0) {
+        rows.push(new TableRow({
+          children: [
+            new TableCell({
+              borders: createDocxBorders(),
+              columnSpan: 7,
+              children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '本季無相關事件', size: 20, font: '標楷體' })],
+              })],
+            }),
+          ],
+        }))
+      } else {
+        // Group by unit for rowSpan
+        const unitGroups: { unit: string; items: CircuitEventSummary[] }[] = []
+        summaries.forEach((s) => {
+          const existing = unitGroups.find((g) => g.unit === s.unit)
+          if (existing) existing.items.push(s)
+          else unitGroups.push({ unit: s.unit, items: [s] })
+        })
+
+        let seq = 0
+        unitGroups.forEach((group) => {
+          group.items.forEach((item, idx) => {
+            seq++
+            const cells: TableCell[] = [
+              docxCell(`${seq}`, { alignment: AlignmentType.CENTER }),
+            ]
+
+            if (idx === 0) {
+              cells.push(new TableCell({
+                borders: createDocxBorders(),
+                rowSpan: group.items.length,
+                children: [new Paragraph({ children: [new TextRun({ text: group.unit, bold: true, size: 20, font: '標楷體' })] })],
+              }))
+            }
+
+            cells.push(docxCell(item.circuit_number))
+            cells.push(docxCell(item.ip_address || '-'))
+            cells.push(docxCell(item.stopPeriod))
+            cells.push(docxCell(`${item.totalHours}`, { alignment: AlignmentType.RIGHT }))
+            cells.push(docxCell(item.reason))
+
+            rows.push(new TableRow({ children: cells }))
+          })
+        })
+      }
+
+      return new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } })
+    }
+
+    const doc = new Document({
+      sections: [{
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: `${rocYear}年第${quarter}季 光纖數據線路及設備維運服務報告`, bold: true, size: 28, font: '標楷體' })],
+          }),
+          new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
+
+          // (a) 連線與服務中斷彙總列表
+          new Paragraph({ children: [new TextRun({ text: `(a) 連線與服務中斷彙總列表 — ${rocYear}年第${quarter}季`, bold: true, size: 24, font: '標楷體' })] }),
+          buildCircuitDocxTable(circuitSummaryAll),
+          new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
+
+          // (b) 計畫性停止服務期間與原因彙整表
+          new Paragraph({ children: [new TextRun({ text: `(b) 計畫性停止服務期間與原因彙整表 — ${rocYear}年第${quarter}季`, bold: true, size: 24, font: '標楷體' })] }),
+          buildCircuitDocxTable(circuitSummaryPlanned),
+          new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
+
+          // (c) 非計畫性停止服務期間與原因彙整表
+          new Paragraph({ children: [new TextRun({ text: `(c) 非計畫性停止服務期間與原因彙整表 — ${rocYear}年第${quarter}季`, bold: true, size: 24, font: '標楷體' })] }),
+          buildCircuitDocxTable(circuitSummaryUnplanned),
+        ],
+      }],
+    })
+
+    const blob = await Packer.toBlob(doc)
+    saveAs(blob, `光纖數據線路報告_${rocYear}年第${quarter}季.docx`)
+  }
+
   // ── Render circuit summary table ──
   function renderCircuitTable(title: string, summaries: CircuitEventSummary[]) {
     // Group by unit for rowSpan
@@ -948,7 +1058,7 @@ export default function ReportsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                   <th className="text-center px-4 py-3 font-medium w-12">序號</th>
                   <th className="text-left px-4 py-3 font-medium">單位</th>
                   <th className="text-left px-4 py-3 font-medium">電路編號</th>
@@ -963,7 +1073,7 @@ export default function ReportsPage() {
                   group.rows.map((row, rowIdx) => {
                     seq++
                     return (
-                      <tr key={`${group.unit}-${rowIdx}`} className="border-b border-[var(--color-border)] hover:bg-gray-50/50">
+                      <tr key={`${group.unit}-${rowIdx}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                         <td className="text-center px-4 py-2.5">{seq}</td>
                         {rowIdx === 0 && (
                           <td className="px-4 py-2.5 font-medium border-r border-[var(--color-border)]" rowSpan={group.rows.length}>
@@ -1043,7 +1153,7 @@ export default function ReportsPage() {
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-lg transition-colors ${
             mainTab === 'hardware'
               ? 'bg-[var(--color-primary)] text-white font-medium'
-              : 'hover:bg-gray-100 text-[var(--color-text-muted)]'
+              : 'hover:bg-[var(--color-hover)] text-[var(--color-text-muted)]'
           }`}
         >
           <HardDrive className="w-4 h-4" /> 硬體統計
@@ -1053,7 +1163,7 @@ export default function ReportsPage() {
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-lg transition-colors ${
             mainTab === 'network'
               ? 'bg-[var(--color-primary)] text-white font-medium'
-              : 'hover:bg-gray-100 text-[var(--color-text-muted)]'
+              : 'hover:bg-[var(--color-hover)] text-[var(--color-text-muted)]'
           }`}
         >
           <Wifi className="w-4 h-4" /> 網路統計
@@ -1069,7 +1179,7 @@ export default function ReportsPage() {
           <div className="flex justify-end mb-4">
             <button
               onClick={exportHardwareWord}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors"
             >
               <FileDown className="w-4 h-4" />
               匯出 Word
@@ -1094,7 +1204,7 @@ export default function ReportsPage() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                   <th className="text-left px-4 py-3 font-medium">類別</th>
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止服務<br/>時間累計 (hrs)</th>
@@ -1104,15 +1214,15 @@ export default function ReportsPage() {
               </thead>
               <tbody>
                 {serverMonthlySummary.map((row, idx) => (
-                  <tr key={SERVER_ASSETS[idx].id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                  <tr key={SERVER_ASSETS[idx].id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                     <td className="px-4 py-3 font-medium">{SERVER_ASSETS[idx].name}</td>
                     <td className="text-right px-4 py-3 font-mono text-xs">
                       {row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : row.hoursPerDevice}
                     </td>
-                    <td className="text-right px-4 py-3 text-amber-600">{row.plannedHours}</td>
-                    <td className="text-right px-4 py-3 text-red-600">{row.unplannedHours}</td>
+                    <td className="text-right px-4 py-3 text-[var(--color-warning)]">{row.plannedHours}</td>
+                    <td className="text-right px-4 py-3 text-[var(--color-danger)]">{row.unplannedHours}</td>
                     <td className="text-right px-4 py-3">
-                      <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-green-600' : row.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                      <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                         {row.availabilityPct}%
                       </span>
                     </td>
@@ -1133,7 +1243,7 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                     <th className="text-left px-4 py-3 font-medium min-w-[160px]">類別</th>
                     <th className="text-left px-4 py-3 font-medium min-w-[160px]">期間</th>
                     <th className="text-right px-4 py-3 font-medium">本季應服務<br/>總時數累計<br/>(hrs)</th>
@@ -1146,7 +1256,7 @@ export default function ReportsPage() {
                   {serverQuarterlyReport.map((device) => (
                     <React.Fragment key={device.label}>
                       {device.monthRows.map((row, i) => (
-                        <tr key={`${device.label}-${i}`} className="border-b border-[var(--color-border)] hover:bg-gray-50/50">
+                        <tr key={`${device.label}-${i}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                           {i === 0 && (
                             <td className="px-4 py-2.5 font-medium align-middle border-r border-[var(--color-border)]" rowSpan={4}>
                               {device.label}
@@ -1158,15 +1268,15 @@ export default function ReportsPage() {
                               ? (device.totalCount > 1 ? `${row.hoursPerDevice}*${device.totalCount}` : row.hoursPerDevice)
                               : ''}
                           </td>
-                          <td className="text-right px-4 py-2.5 text-amber-600">
+                          <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">
                             {row.hasData ? row.plannedHours : ''}
                           </td>
-                          <td className="text-right px-4 py-2.5 text-red-600">
+                          <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">
                             {row.hasData ? row.unplannedHours : ''}
                           </td>
                           <td className="text-right px-4 py-2.5">
                             {row.hasData ? (
-                              <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-green-600' : row.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                              <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                                 {row.availabilityPct}%
                               </span>
                             ) : ''}
@@ -1174,7 +1284,7 @@ export default function ReportsPage() {
                         </tr>
                       ))}
                       {/* Quarterly total row */}
-                      <tr className="border-b-2 border-[var(--color-border)] bg-amber-50/60">
+                      <tr className="border-b-2 border-[var(--color-border)] bg-[var(--color-warning-dim)]">
                         <td className="px-4 py-2.5 text-xs font-semibold">
                           {rocYear}年<br/>第{quarter}季總計
                         </td>
@@ -1183,10 +1293,10 @@ export default function ReportsPage() {
                             ? `${device.quarterly.hoursPerDevice}*${device.totalCount}`
                             : device.quarterly.hoursPerDevice}
                         </td>
-                        <td className="text-right px-4 py-2.5 text-amber-600 font-semibold">{device.quarterly.plannedHours}</td>
-                        <td className="text-right px-4 py-2.5 text-red-600 font-semibold">{device.quarterly.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">{device.quarterly.plannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">{device.quarterly.unplannedHours}</td>
                         <td className="text-right px-4 py-2.5">
-                          <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-green-600' : device.quarterly.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                          <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : device.quarterly.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {device.quarterly.availabilityPct}%
                           </span>
                         </td>
@@ -1211,8 +1321,8 @@ export default function ReportsPage() {
               onClick={() => setNetworkSubTab('monthly')}
               className={`flex-1 px-4 py-2 text-sm rounded-lg transition-colors ${
                 networkSubTab === 'monthly'
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'hover:bg-gray-100 text-[var(--color-text-muted)]'
+                  ? 'bg-[var(--color-primary)] text-white font-medium'
+                  : 'hover:bg-[var(--color-hover)] text-[var(--color-text-muted)]'
               }`}
             >
               工作月報
@@ -1221,8 +1331,8 @@ export default function ReportsPage() {
               onClick={() => setNetworkSubTab('fiber')}
               className={`flex-1 px-4 py-2 text-sm rounded-lg transition-colors ${
                 networkSubTab === 'fiber'
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'hover:bg-gray-100 text-[var(--color-text-muted)]'
+                  ? 'bg-[var(--color-primary)] text-white font-medium'
+                  : 'hover:bg-[var(--color-hover)] text-[var(--color-text-muted)]'
               }`}
             >
               光纖數據線路及設備維運服務報告
@@ -1235,7 +1345,7 @@ export default function ReportsPage() {
               <div className="flex justify-end mb-4">
                 <button
                   onClick={exportNetworkWord}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors"
                 >
                   <FileDown className="w-4 h-4" />
                   匯出 Word
@@ -1256,7 +1366,7 @@ export default function ReportsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                         <th className="text-left px-4 py-3 font-medium min-w-[160px]">類別</th>
                         <th className="text-left px-4 py-3 font-medium min-w-[160px]">期間</th>
                         <th className="text-right px-4 py-3 font-medium">本季應服務<br/>總時數累計<br/>(hrs)</th>
@@ -1269,7 +1379,7 @@ export default function ReportsPage() {
                       {quarterlyReport.map((device) => (
                         <React.Fragment key={device.label}>
                           {device.monthRows.map((row, i) => (
-                            <tr key={`${device.label}-${i}`} className="border-b border-[var(--color-border)] hover:bg-gray-50/50">
+                            <tr key={`${device.label}-${i}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                               {i === 0 && (
                                 <td className="px-4 py-2.5 font-medium align-middle border-r border-[var(--color-border)]" rowSpan={4}>
                                   {device.label}
@@ -1281,15 +1391,15 @@ export default function ReportsPage() {
                                   ? (device.totalCount > 1 ? `${row.hoursPerDevice}*${device.totalCount}` : row.hoursPerDevice)
                                   : ''}
                               </td>
-                              <td className="text-right px-4 py-2.5 text-amber-600">
+                              <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">
                                 {row.hasData ? row.plannedHours : ''}
                               </td>
-                              <td className="text-right px-4 py-2.5 text-red-600">
+                              <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">
                                 {row.hasData ? row.unplannedHours : ''}
                               </td>
                               <td className="text-right px-4 py-2.5">
                                 {row.hasData ? (
-                                  <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-green-600' : row.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                                  <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                                     {row.availabilityPct}%
                                   </span>
                                 ) : ''}
@@ -1297,7 +1407,7 @@ export default function ReportsPage() {
                             </tr>
                           ))}
                           {/* Quarterly total row */}
-                          <tr className="border-b-2 border-[var(--color-border)] bg-amber-50/60">
+                          <tr className="border-b-2 border-[var(--color-border)] bg-[var(--color-warning-dim)]">
                             <td className="px-4 py-2.5 text-xs font-semibold">
                               {rocYear}年<br/>第{quarter}季總計
                             </td>
@@ -1306,10 +1416,10 @@ export default function ReportsPage() {
                                 ? `${device.quarterly.hoursPerDevice}*${device.totalCount}`
                                 : device.quarterly.hoursPerDevice}
                             </td>
-                            <td className="text-right px-4 py-2.5 text-amber-600 font-semibold">{device.quarterly.plannedHours}</td>
-                            <td className="text-right px-4 py-2.5 text-red-600 font-semibold">{device.quarterly.unplannedHours}</td>
+                            <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">{device.quarterly.plannedHours}</td>
+                            <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">{device.quarterly.unplannedHours}</td>
                             <td className="text-right px-4 py-2.5">
-                              <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-green-600' : device.quarterly.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                              <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : device.quarterly.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                                 {device.quarterly.availabilityPct}%
                                 <br/><span className="text-xs font-normal text-[var(--color-text-muted)]">【註】</span>
                               </span>
@@ -1337,7 +1447,7 @@ export default function ReportsPage() {
                 </div>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                       <th className="text-left px-4 py-3 font-medium">類別</th>
                       <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                       <th className="text-right px-4 py-3 font-medium">計畫性停止服務<br/>時間累計 (hrs)</th>
@@ -1347,15 +1457,15 @@ export default function ReportsPage() {
                   </thead>
                   <tbody>
                     {monthlySummary.map((row) => (
-                      <tr key={row.label} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                      <tr key={row.label} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         <td className="px-4 py-3 font-medium">{row.label}</td>
                         <td className="text-right px-4 py-3 font-mono text-xs">
                           {row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : row.hoursPerDevice}
                         </td>
-                        <td className="text-right px-4 py-3 text-amber-600">{row.plannedHours}</td>
-                        <td className="text-right px-4 py-3 text-red-600">{row.unplannedHours}</td>
+                        <td className="text-right px-4 py-3 text-[var(--color-warning)]">{row.plannedHours}</td>
+                        <td className="text-right px-4 py-3 text-[var(--color-danger)]">{row.unplannedHours}</td>
                         <td className="text-right px-4 py-3">
-                          <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-green-600' : row.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                          <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {row.availabilityPct}%
                           </span>
                         </td>
@@ -1372,6 +1482,16 @@ export default function ReportsPage() {
           {/* ══════════════════════════════════════════════ */}
           {networkSubTab === 'fiber' && (
             <>
+              {/* Export button */}
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={exportFiberWord}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors"
+                >
+                  <FileDown className="w-4 h-4" />
+                  匯出 Word
+                </button>
+              </div>
               {renderCircuitTable(
                 `(a) 連線與服務中斷彙總列表 — ${rocYear}年第${quarter}季`,
                 circuitSummaryAll,

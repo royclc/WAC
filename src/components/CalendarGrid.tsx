@@ -57,29 +57,29 @@ export default function CalendarGrid({
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
         <button
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-[var(--color-hover)] rounded-lg transition-colors"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft className="w-5 h-5 text-[var(--color-text-muted)]" />
         </button>
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">{formatMonthTitle(currentMonth)}</h2>
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{formatMonthTitle(currentMonth)}</h2>
           <YearMonthPicker currentDate={currentMonth} onChange={setCurrentMonth} />
         </div>
         <button
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-[var(--color-hover)] rounded-lg transition-colors"
         >
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-5 h-5 text-[var(--color-text-muted)]" />
         </button>
       </div>
 
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-[var(--color-border)]">
+      <div className="grid grid-cols-7 border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
         {WEEKDAYS.map((day, i) => (
           <div
             key={day}
             className={`text-center text-sm font-medium py-3 ${
-              i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-[var(--color-text-muted)]'
+              i === 0 ? 'text-[var(--color-weekend-sun)]' : i === 6 ? 'text-[var(--color-weekend-sat)]' : 'text-[var(--color-text-muted)]'
             }`}
           >
             {day}
@@ -101,15 +101,15 @@ export default function CalendarGrid({
               key={idx}
               onClick={() => onDateClick?.(date)}
               className={`min-h-[110px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${
-                !inMonth ? 'bg-gray-50' : 'hover:bg-blue-50/30'
-              } ${selected ? 'bg-blue-50 ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}
+                !inMonth ? 'bg-[var(--color-day-outside)]' : 'hover:bg-[var(--color-table-row-hover)]'
+              } ${selected ? 'bg-[var(--color-active)] ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span
                   className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${
                     today ? 'bg-[var(--color-primary)] text-white font-bold' : ''
-                  } ${!inMonth ? 'text-gray-300' : ''} ${
-                    dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : ''
+                  } ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${
+                    dayOfWeek === 0 ? 'text-[var(--color-weekend-sun)]' : dayOfWeek === 6 ? 'text-[var(--color-weekend-sat)]' : ''
                   }`}
                 >
                   {format(date, 'd')}
@@ -128,7 +128,7 @@ export default function CalendarGrid({
                         onEventClick?.(event)
                       }}
                       className="text-xs px-1.5 py-0.5 rounded truncate text-white"
-                      style={{ backgroundColor: event.color || '#3B82F6' }}
+                      style={{ backgroundColor: event.color || '#06b6d4' }}
                     >
                       {event.title}
                     </div>

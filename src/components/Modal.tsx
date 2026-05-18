@@ -22,12 +22,12 @@ export default function Modal({ open, onClose, title, children, width = 'max-w-l
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className={`relative bg-white rounded-xl shadow-xl ${width} w-full mx-4 max-h-[90vh] flex flex-col`}>
+      <div className="absolute inset-0 bg-[var(--color-overlay)]" onClick={onClose} />
+      <div className={`relative bg-[var(--color-modal-bg)] rounded-xl shadow-2xl ${width} w-full mx-4 max-h-[90vh] flex flex-col border border-[var(--color-border)]`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
+          <h3 className="text-lg font-semibold text-[var(--color-text)]">{title}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-[var(--color-hover)] rounded-lg transition-colors">
+            <X className="w-5 h-5 text-[var(--color-text-muted)]" />
           </button>
         </div>
         <div className="p-6 overflow-y-auto">{children}</div>

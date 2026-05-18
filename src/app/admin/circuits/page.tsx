@@ -158,10 +158,10 @@ export default function CircuitManagementPage() {
         </div>
         <div className="flex gap-2">
           <button onClick={exportCSV}
-            className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50 flex items-center gap-1">
+            className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
             <Download className="w-4 h-4" /> 匯出
           </button>
-          <label className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50 flex items-center gap-1 cursor-pointer">
+          <label className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1 cursor-pointer">
             <Upload className="w-4 h-4" /> 匯入
             <input type="file" accept=".csv" className="hidden" onChange={importCSV} />
           </label>
@@ -195,7 +195,7 @@ export default function CircuitManagementPage() {
       <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-gray-50">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
               <th className="text-left px-4 py-3 font-medium w-12">序號</th>
               <th className="text-left px-4 py-3 font-medium">單位</th>
               <th className="text-left px-4 py-3 font-medium">電路編號</th>
@@ -208,7 +208,7 @@ export default function CircuitManagementPage() {
           <tbody>
             {grouped.map(({ unit, circuits: unitCircuits }) =>
               unitCircuits.map((c, i) => (
-                <tr key={c.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                <tr key={c.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                   {i === 0 && (
                     <>
                       <td className="px-4 py-2.5 text-center font-medium border-r border-[var(--color-border)]" rowSpan={unitCircuits.length}>
@@ -224,16 +224,16 @@ export default function CircuitManagementPage() {
                   )}
                   <td className="px-4 py-2.5 font-mono">{c.circuit_number}</td>
                   <td className="px-4 py-2.5">
-                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">{c.bandwidth}</span>
+                    <span className="bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)] px-2 py-0.5 rounded text-xs font-medium">{c.bandwidth}</span>
                   </td>
                   <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{c.ip_address || '-'}</td>
                   <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{c.description || '-'}</td>
                   <td className="px-4 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600">
+                      <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-[var(--color-primary-dim)] rounded text-[var(--color-primary)]">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => remove(c.id)} className="p-1.5 hover:bg-red-50 rounded text-red-600">
+                      <button onClick={() => remove(c.id)} className="p-1.5 hover:bg-[var(--color-danger-dim)] rounded text-[var(--color-danger)]">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -280,7 +280,7 @@ export default function CircuitManagementPage() {
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={save} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">
               {editingId ? '更新' : '新增'}
             </button>

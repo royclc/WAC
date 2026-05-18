@@ -184,10 +184,10 @@ export default function UnitsPage() {
 
   function renderDeviceRow(device: NetworkDevice, indent: number) {
     return (
-      <tr key={device.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+      <tr key={device.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
         <td className="px-4 py-3 font-medium" style={{ paddingLeft: `${indent}px` }}>{device.name}</td>
         <td className="px-4 py-3">
-          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${device.zone === 'internal' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${device.zone === 'internal' ? 'bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]' : 'bg-[var(--color-badge-yellow)] text-[var(--color-warning)]'}`}>
             {device.zone === 'internal' ? <Lock className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
             {ZONE_LABELS[device.zone]}
           </span>
@@ -197,12 +197,12 @@ export default function UnitsPage() {
           <span className="font-semibold text-[var(--color-primary)]">{device.quantity}</span>
         </td>
         <td className="px-4 py-3">
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{device.vendor}</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{device.vendor}</span>
         </td>
         <td className="px-4 py-3 text-[var(--color-text-muted)]">{device.description}</td>
         <td className="px-4 py-3 text-right">
-          <button onClick={() => openEdit(device)} className="p-1 hover:bg-gray-100 rounded mr-1"><Pencil className="w-4 h-4" /></button>
-          <button onClick={() => deleteDevice(device.id)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => openEdit(device)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
+          <button onClick={() => deleteDevice(device.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
         </td>
       </tr>
     )
@@ -213,7 +213,7 @@ export default function UnitsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">網路管理</h1>
         <div className="flex gap-2">
-          <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50 flex items-center gap-1">
+          <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
             <Upload className="w-4 h-4" /> 匯入
           </button>
           <button onClick={openNew} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
@@ -232,7 +232,7 @@ export default function UnitsPage() {
           <div className="text-sm text-[var(--color-text-muted)]">總局</div>
         </div>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
-          <div className="text-2xl font-bold text-blue-600">{internalCount}</div>
+          <div className="text-2xl font-bold text-[var(--color-primary)]">{internalCount}</div>
           <div className="text-sm text-[var(--color-text-muted)]">內網設備</div>
         </div>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
@@ -245,23 +245,23 @@ export default function UnitsPage() {
         <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
           {[{ k: 'all', l: '全部' }, { k: 'headquarters', l: '總局' }, { k: 'branch', l: '分局稽徵所' }].map(({ k, l }) => (
             <button key={k} onClick={() => { setFilterCategory(k as 'all' | UnitCategory); setFilterSubUnit('all') }}
-              className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-gray-50'}`}>
+              className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>
               {l}
             </button>
           ))}
         </div>
         {filterCategory === 'branch' && (
           <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-            <button onClick={() => setFilterSubUnit('all')} className={`px-3 py-1.5 text-sm ${filterSubUnit === 'all' ? 'bg-green-600 text-white' : 'hover:bg-gray-50'}`}>全部</button>
+            <button onClick={() => setFilterSubUnit('all')} className={`px-3 py-1.5 text-sm ${filterSubUnit === 'all' ? 'bg-[var(--color-success)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>全部</button>
             {Object.entries(SUB_UNIT_LABELS).map(([k, l]) => (
-              <button key={k} onClick={() => setFilterSubUnit(k as SubUnit)} className={`px-3 py-1.5 text-sm ${filterSubUnit === k ? 'bg-green-600 text-white' : 'hover:bg-gray-50'}`}>{l}</button>
+              <button key={k} onClick={() => setFilterSubUnit(k as SubUnit)} className={`px-3 py-1.5 text-sm ${filterSubUnit === k ? 'bg-[var(--color-success)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>{l}</button>
             ))}
           </div>
         )}
         <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
           {[{ k: 'all', l: '全部網路' }, { k: 'internal', l: '內網' }, { k: 'external', l: '外網' }].map(({ k, l }) => (
             <button key={k} onClick={() => setFilterZone(k as 'all' | NetworkZone)}
-              className={`px-3 py-1.5 text-sm ${filterZone === k ? (k === 'internal' ? 'bg-blue-600 text-white' : k === 'external' ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white') : 'hover:bg-gray-50'}`}>
+              className={`px-3 py-1.5 text-sm ${filterZone === k ? (k === 'internal' ? 'bg-[var(--color-primary)] text-white' : k === 'external' ? 'bg-[var(--color-warning)] text-white' : 'bg-[var(--color-border)] text-white') : 'hover:bg-[var(--color-hover)]'}`}>
               {l}
             </button>
           ))}
@@ -275,7 +275,7 @@ export default function UnitsPage() {
       <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-gray-50">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
               <th className="text-left px-4 py-3 font-medium">名稱</th>
               <th className="text-left px-4 py-3 font-medium">網路</th>
               <th className="text-left px-4 py-3 font-medium">設備類型</th>
@@ -290,7 +290,7 @@ export default function UnitsPage() {
               <>
                 <tr>
                   <td colSpan={7} className="p-0">
-                    <button onClick={() => toggleGroup('headquarters')} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium bg-purple-50 hover:bg-purple-100 transition-colors text-purple-800">
+                    <button onClick={() => toggleGroup('headquarters')} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium bg-purple-900/30 hover:bg-purple-900/50 transition-colors text-purple-300">
                       {expandedGroups.has('headquarters') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       <Building2 className="w-4 h-4" /> 總局
                       <span className="text-xs opacity-60 ml-1">({grouped.headquarters.length})</span>
@@ -306,7 +306,7 @@ export default function UnitsPage() {
                 {filterCategory === 'all' && (
                   <tr>
                     <td colSpan={7} className="p-0">
-                      <div className="px-4 py-2.5 text-sm font-medium bg-green-50 text-green-800 flex items-center gap-2">
+                      <div className="px-4 py-2.5 text-sm font-medium bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)] flex items-center gap-2">
                         <Building2 className="w-4 h-4" /> 分局稽徵所
                         <span className="text-xs opacity-60 ml-1">({branchCount})</span>
                       </div>
@@ -321,7 +321,7 @@ export default function UnitsPage() {
                     <React.Fragment key={subKey}>
                       <tr>
                         <td colSpan={7} className="p-0">
-                          <button onClick={() => toggleGroup(subKey)} className="flex items-center gap-2 w-full px-4 pl-8 py-2 text-sm font-medium bg-gray-50 hover:bg-gray-100 transition-colors">
+                          <button onClick={() => toggleGroup(subKey)} className="flex items-center gap-2 w-full px-4 pl-8 py-2 text-sm font-medium bg-[var(--color-table-header)] hover:bg-[var(--color-hover)] transition-colors">
                             {expandedGroups.has(subKey) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                             {subLabel}
                             <span className="text-xs text-[var(--color-text-muted)] ml-1">({items.length})</span>
@@ -363,7 +363,7 @@ export default function UnitsPage() {
             <div className="flex gap-2">
               {Object.entries(ZONE_LABELS).map(([k, v]) => (
                 <button key={k} onClick={() => setFormZone(k as NetworkZone)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${formZone === k ? (k === 'internal' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-orange-50 border-orange-300 text-orange-700') : 'border-[var(--color-border)] hover:bg-gray-50'}`}>
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${formZone === k ? (k === 'internal' ? 'bg-[var(--color-primary-dim)] border-[var(--color-primary)] text-[var(--color-badge-blue-text)]' : 'bg-[var(--color-warning-dim)] border-[var(--color-warning)] text-[var(--color-warning)]') : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
                   {k === 'internal' ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
                   {v}
                 </button>
@@ -395,7 +395,7 @@ export default function UnitsPage() {
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveDevice} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>
@@ -404,13 +404,13 @@ export default function UnitsPage() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title="匯入網路設備清單">
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-muted)]">
-            每行一筆：<code className="text-xs bg-gray-100 px-1 rounded">名稱,類別(headquarters/branch),子單位(a_office/b_branch/c_office),網路(internal/external),設備類型,廠商,說明</code>
+            每行一筆：<code className="text-xs bg-[var(--color-bg-elevated)] px-1 rounded">名稱,類別(headquarters/branch),子單位(a_office/b_branch/c_office),網路(internal/external),設備類型,廠商,說明</code>
           </p>
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={6}
             placeholder={`總局內網防火牆2,headquarters,,internal,防火牆,備援防火牆\na稽徵所外網前端交換器2,branch,a_office,external,前端交換器,備援交換器`}
             className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono text-xs" />
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={handleImport} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">匯入</button>
           </div>
         </div>

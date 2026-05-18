@@ -76,7 +76,7 @@ export default function VendorsPage() {
 
       <div className="flex items-center gap-3 mb-4">
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl px-4 py-3">
-          <span className="text-2xl font-bold text-blue-600">{vendors.length}</span>
+          <span className="text-2xl font-bold text-[var(--color-primary)]">{vendors.length}</span>
           <span className="text-sm text-[var(--color-text-muted)] ml-2">家廠商</span>
         </div>
         <div className="relative flex-1 max-w-xs">
@@ -88,7 +88,7 @@ export default function VendorsPage() {
       <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-gray-50">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
               <th className="text-left px-4 py-3 font-medium">廠商名稱</th>
               <th className="text-left px-4 py-3 font-medium">聯絡人</th>
               <th className="text-left px-4 py-3 font-medium">電話</th>
@@ -99,17 +99,17 @@ export default function VendorsPage() {
           </thead>
           <tbody>
             {filtered.map((v) => (
-              <tr key={v.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+              <tr key={v.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
                 <td className="px-4 py-3 font-medium">
                   <Store className="w-4 h-4 inline mr-2 text-purple-600" />{v.name}
                 </td>
                 <td className="px-4 py-3">{v.contact_person}</td>
                 <td className="px-4 py-3 text-sm">{v.phone}</td>
-                <td className="px-4 py-3 text-sm text-blue-600">{v.email}</td>
+                <td className="px-4 py-3 text-sm text-[var(--color-primary)]">{v.email}</td>
                 <td className="px-4 py-3 text-[var(--color-text-muted)]">{v.description}</td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => openEdit(v)} className="p-1 hover:bg-gray-100 rounded mr-1"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => remove(v.id)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(v)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => remove(v.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
                 </td>
               </tr>
             ))}
@@ -143,7 +143,7 @@ export default function VendorsPage() {
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={save} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>

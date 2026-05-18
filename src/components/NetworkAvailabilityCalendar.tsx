@@ -396,20 +396,20 @@ export default function NetworkAvailabilityCalendar() {
         {/* Calendar */}
         <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden mb-6">
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold">{monthTitle}</h2>
               <YearMonthPicker currentDate={currentMonth} onChange={setCurrentMonth} />
             </div>
-            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
           <div className="grid grid-cols-7 border-b border-[var(--color-border)]">
             {WEEKDAYS.map((day, i) => (
-              <div key={day} className={`text-center text-sm font-medium py-3 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-[var(--color-text-muted)]'}`}>{day}</div>
+              <div key={day} className={`text-center text-sm font-medium py-3 ${i === 0 ? 'text-[var(--color-weekend-sun)]' : i === 6 ? 'text-[var(--color-weekend-sat)]' : 'text-[var(--color-text-muted)]'}`}>{day}</div>
             ))}
           </div>
           <div className="grid grid-cols-7">
@@ -422,10 +422,10 @@ export default function NetworkAvailabilityCalendar() {
               const dow = date.getDay()
               return (
                 <div key={idx} onClick={() => setSelectedDate(date)}
-                  className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-gray-50' : hasUnplanned ? 'bg-red-50/50' : dayEvents.length > 0 ? 'bg-amber-50/30' : 'hover:bg-blue-50/30'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
+                  className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-[var(--color-day-outside)]' : hasUnplanned ? 'bg-[var(--color-danger-dim)]' : dayEvents.length > 0 ? 'bg-[var(--color-warning-dim)]' : 'hover:bg-[var(--color-table-row-hover)]'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-gray-300' : ''} ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : ''}`}>{format(date, 'd')}</span>
-                    {dayEvents.length > 0 && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-red-500' : 'text-amber-500'}`} />}
+                    <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${dow === 0 ? 'text-[var(--color-weekend-sun)]' : dow === 6 ? 'text-[var(--color-weekend-sat)]' : ''}`}>{format(date, 'd')}</span>
+                    {dayEvents.length > 0 && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-weekend-sun)]' : 'text-[var(--color-warning)]'}`} />}
                   </div>
                   <div className="space-y-0.5">
                     {dayEvents.slice(0, 2).map((e) => (
@@ -447,7 +447,7 @@ export default function NetworkAvailabilityCalendar() {
             { key: 'unitSummary' as const, label: '各單位可用率彙總' },
           ].map(({ key, label }) => (
             <button key={key} onClick={() => setActiveTab(key)}
-              className={`flex-1 px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === key ? 'bg-[var(--color-primary)] text-white font-medium' : 'hover:bg-gray-100 text-[var(--color-text-muted)]'}`}>
+              className={`flex-1 px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === key ? 'bg-[var(--color-primary)] text-white font-medium' : 'hover:bg-[var(--color-hover)] text-[var(--color-text-muted)]'}`}>
               {label}
             </button>
           ))}
@@ -465,7 +465,7 @@ export default function NetworkAvailabilityCalendar() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                   <th className="text-left px-4 py-3 font-medium">類別</th>
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止服務<br/>時間累計 (hrs)</th>
@@ -475,13 +475,13 @@ export default function NetworkAvailabilityCalendar() {
               </thead>
               <tbody>
                 {deviceTypeReport.map(({ label, stats }) => (
-                  <tr key={label} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                  <tr key={label} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                     <td className="px-4 py-3 font-medium">{label}</td>
                     <td className="text-right px-4 py-3 font-mono text-xs">{hoursPerDevice}*{stats.count}</td>
-                    <td className="text-right px-4 py-3 text-amber-600">{stats.plannedHours}</td>
-                    <td className="text-right px-4 py-3 text-red-600">{stats.unplannedHours}</td>
+                    <td className="text-right px-4 py-3 text-[var(--color-warning)]">{stats.plannedHours}</td>
+                    <td className="text-right px-4 py-3 text-[var(--color-danger)]">{stats.unplannedHours}</td>
                     <td className="text-right px-4 py-3">
-                      <span className={`font-semibold ${stats.availabilityPct >= 99.9 ? 'text-green-600' : stats.availabilityPct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                      <span className={`font-semibold ${stats.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : stats.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                         {stats.availabilityPct}%
                       </span>
                     </td>
@@ -500,7 +500,7 @@ export default function NetworkAvailabilityCalendar() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                   <th className="text-left px-4 py-3 font-medium w-12">序號</th>
                   <th className="text-left px-4 py-3 font-medium">單位</th>
                   <th className="text-left px-4 py-3 font-medium">設備名稱</th>
@@ -517,7 +517,7 @@ export default function NetworkAvailabilityCalendar() {
                 {unitDetailReport.map(({ unit, seq, devices }) => (
                   <React.Fragment key={unit}>
                     {devices.map((d, i) => (
-                      <tr key={d.asset.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                      <tr key={d.asset.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         {i === 0 && (
                           <>
                             <td className="px-4 py-2.5 text-center font-medium" rowSpan={devices.length}>{seq}</td>
@@ -526,17 +526,17 @@ export default function NetworkAvailabilityCalendar() {
                         )}
                         <td className="px-4 py-2.5">{d.asset.name}</td>
                         <td className="px-4 py-2.5">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${d.asset.zone === 'internal' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${d.asset.zone === 'internal' ? 'bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]' : 'bg-[var(--color-badge-yellow)] text-[var(--color-badge-yellow-text)]'}`}>
                             {ZONE_LABELS[d.asset.zone]}
                           </span>
                         </td>
                         <td className="px-4 py-2.5 text-xs">{d.asset.deviceType}</td>
                         <td className="text-right px-4 py-2.5 font-semibold">{d.asset.quantity}</td>
                         <td className="text-right px-4 py-2.5 font-mono text-xs">{d.asset.quantity > 1 ? `${hoursPerDevice}*${d.asset.quantity}` : hoursPerDevice}</td>
-                        <td className="text-right px-4 py-2.5 text-amber-600">{d.plannedHours}</td>
-                        <td className="text-right px-4 py-2.5 text-red-600">{d.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">{d.plannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">{d.unplannedHours}</td>
                         <td className="text-right px-4 py-2.5">
-                          <span className={`font-semibold ${d.pct >= 99.9 ? 'text-green-600' : d.pct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                          <span className={`font-semibold ${d.pct >= 99.9 ? 'text-[var(--color-success)]' : d.pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {d.pct}%
                           </span>
                         </td>
@@ -558,7 +558,7 @@ export default function NetworkAvailabilityCalendar() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                   <th className="text-left px-4 py-3 font-medium w-12">序號</th>
                   <th className="text-left px-4 py-3 font-medium">單位</th>
                   <th className="text-left px-4 py-3 font-medium">電路編號</th>
@@ -574,7 +574,7 @@ export default function NetworkAvailabilityCalendar() {
                 {circuitReport.map(({ unit, seq, circuits: unitCircuits }) => (
                   <React.Fragment key={unit}>
                     {unitCircuits.map((row, i) => (
-                      <tr key={row.circuit.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                      <tr key={row.circuit.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         {i === 0 && (
                           <>
                             <td className="px-4 py-2.5 text-center font-medium border-r border-[var(--color-border)]" rowSpan={unitCircuits.length}>{seq}</td>
@@ -585,10 +585,10 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="text-right px-4 py-2.5">{row.circuit.bandwidth}</td>
                         <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{row.circuit.ip_address || ''}</td>
                         <td className="text-right px-4 py-2.5">{hoursPerDevice}</td>
-                        <td className="text-right px-4 py-2.5 text-amber-600">{row.plannedHours}</td>
-                        <td className="text-right px-4 py-2.5 text-red-600">{row.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">{row.plannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">{row.unplannedHours}</td>
                         <td className="text-right px-4 py-2.5">
-                          <span className={`font-semibold ${row.pct >= 99.9 ? 'text-green-600' : row.pct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                          <span className={`font-semibold ${row.pct >= 99.9 ? 'text-[var(--color-success)]' : row.pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {row.pct}%
                           </span>
                         </td>
@@ -672,7 +672,7 @@ export default function NetworkAvailabilityCalendar() {
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                       <th className="text-left px-4 py-3 font-medium">類型</th>
                       <th className="text-left px-4 py-3 font-medium">事件性質</th>
                       <th className="text-left px-4 py-3 font-medium">設備/線路名稱</th>
@@ -683,9 +683,9 @@ export default function NetworkAvailabilityCalendar() {
                   </thead>
                   <tbody>
                     {quarterDeviceEvents.map((e) => (
-                      <tr key={`d-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                      <tr key={`d-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">設備</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]">設備</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
@@ -701,9 +701,9 @@ export default function NetworkAvailabilityCalendar() {
                     {quarterCircuitEvents.map((e) => {
                       const circuit = DEMO_CIRCUITS.find((c) => c.id === e.circuit_id)
                       return (
-                        <tr key={`c-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                        <tr key={`c-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                           <td className="px-4 py-3">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">線路</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-yellow)] text-[var(--color-badge-yellow-text)]">線路</span>
                           </td>
                           <td className="px-4 py-3">
                             <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
@@ -730,7 +730,7 @@ export default function NetworkAvailabilityCalendar() {
         <div className="w-80 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 h-fit sticky top-6">
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
           {selectedDayEvents.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-green-600">
+            <div className="flex items-center gap-2 text-sm text-[var(--color-success)]">
               <CheckCircle className="w-4 h-4" /> 當日無事件
             </div>
           ) : (
@@ -741,7 +741,7 @@ export default function NetworkAvailabilityCalendar() {
                     <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
                       {PLAN_TYPE_LABELS[e.plan_type]}
                     </span>
-                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-red-500 text-xs">刪除</button>
+                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
                   </div>
                   <div className="font-medium text-sm mt-1">{e.title}</div>
                   <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
@@ -751,7 +751,7 @@ export default function NetworkAvailabilityCalendar() {
               ))}
             </div>
           )}
-          <button onClick={() => openNewEvent(selectedDate)} className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-gray-50">+ 新增事件</button>
+          <button onClick={() => openNewEvent(selectedDate)} className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">+ 新增事件</button>
         </div>
       )}
 
@@ -764,7 +764,7 @@ export default function NetworkAvailabilityCalendar() {
             <div className="flex gap-2">
               {([['unit', '依單位'], ['device', '依設備']] as const).map(([k, v]) => (
                 <button key={k} onClick={() => { setFormSelectMode(k); setFormSelectedUnit(''); setFormSelectedAssets([]) }}
-                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formSelectMode === k ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] hover:bg-gray-50'}`}>
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formSelectMode === k ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
                   {v}
                 </button>
               ))}
@@ -789,7 +789,7 @@ export default function NetworkAvailabilityCalendar() {
                       <div key={zone}>
                         <div className="text-xs font-medium text-[var(--color-text-muted)] mb-1">{ZONE_LABELS[zone]}</div>
                         {unitAssets.filter((a) => a.zone === zone).map((a) => (
-                          <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-gray-50 rounded px-1">
+                          <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1">
                             <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)}
                               className="rounded border-gray-300" />
                             <span>{a.name}</span>
@@ -821,7 +821,7 @@ export default function NetworkAvailabilityCalendar() {
                         <div key={zone} className="ml-2 mb-1">
                           <div className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{ZONE_LABELS[zone]}</div>
                           {unitAssets.filter((a) => a.zone === zone).map((a) => (
-                            <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-gray-50 rounded px-1 ml-2">
+                            <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-2">
                               <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)}
                                 className="rounded border-gray-300" />
                               <span>{a.name}</span>
@@ -853,7 +853,7 @@ export default function NetworkAvailabilityCalendar() {
             <div className="flex gap-2">
               {Object.entries(PLAN_TYPE_LABELS).map(([k, v]) => (
                 <button key={k} onClick={() => setFormPlanType(k as EventPlanType)}
-                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formPlanType === k ? (k === 'planned' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-red-50 border-red-300 text-red-700') : 'border-[var(--color-border)] hover:bg-gray-50'}`}>
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formPlanType === k ? (k === 'planned' ? 'bg-[var(--color-warning-dim)] border-[var(--color-warning)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-dim)] border-[var(--color-danger)] text-[var(--color-danger)]') : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
                   {v}
                 </button>
               ))}
@@ -878,9 +878,9 @@ export default function NetworkAvailabilityCalendar() {
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">取消</button>
             <button onClick={saveEvent} disabled={formSelectedAssets.length === 0}
-              className={`px-4 py-2 text-sm rounded-lg ${formSelectedAssets.length > 0 ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+              className={`px-4 py-2 text-sm rounded-lg ${formSelectedAssets.length > 0 ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
               儲存{formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}
             </button>
           </div>

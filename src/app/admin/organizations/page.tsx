@@ -283,14 +283,14 @@ export default function OrganizationsPage() {
         </div>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
-            <Wifi className="w-4 h-4 text-blue-500" />
+            <Wifi className="w-4 h-4 text-[var(--color-primary)]" />
             <span className="text-sm text-[var(--color-text-muted)]">網路設備</span>
           </div>
           <div className="text-2xl font-bold">{totalDevices}</div>
         </div>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
-            <Cable className="w-4 h-4 text-green-500" />
+            <Cable className="w-4 h-4 text-[var(--color-success)]" />
             <span className="text-sm text-[var(--color-text-muted)]">電路總數</span>
           </div>
           <div className="text-2xl font-bold">{totalCircuits}</div>
@@ -306,7 +306,7 @@ export default function OrganizationsPage() {
           return (
             <div key={unit.id} className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
               {/* Unit header */}
-              <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(unit.id)}>
+              <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[var(--color-hover)]" onClick={() => toggleExpand(unit.id)}>
                 <div className="flex items-center gap-3">
                   {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   <Building2 className="w-5 h-5 text-[var(--color-primary)]" />
@@ -317,19 +317,19 @@ export default function OrganizationsPage() {
                     </span>
                   </div>
                   <div className="flex gap-2 ml-4">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)]">
                       <Wifi className="w-3 h-3 inline mr-1" />{unit.devices.length} 設備
                     </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)]">
                       <Cable className="w-3 h-3 inline mr-1" />{unit.circuits.length} 電路
                     </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => openEdit(unit)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600" title="編輯">
+                  <button onClick={() => openEdit(unit)} className="p-1.5 hover:bg-[var(--color-primary-dim)] rounded text-[var(--color-primary)]" title="編輯">
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button onClick={() => removeUnit(unit.id)} className="p-1.5 hover:bg-red-50 rounded text-red-600" title="刪除">
+                  <button onClick={() => removeUnit(unit.id)} className="p-1.5 hover:bg-[var(--color-danger-dim)] rounded text-[var(--color-danger)]" title="刪除">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -341,24 +341,24 @@ export default function OrganizationsPage() {
                   {/* Devices section */}
                   <div className="px-4 py-3">
                     <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-blue-500" /> 網路設備
+                      <Shield className="w-4 h-4 text-[var(--color-primary)]" /> 網路設備
                       <span className="text-xs text-[var(--color-text-muted)]">（新增單位時自動建立）</span>
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                       {/* Internal */}
                       <div>
                         <div className="flex items-center gap-1 mb-2">
-                          <Lock className="w-3.5 h-3.5 text-blue-600" />
-                          <span className="text-xs font-medium text-blue-700">內網</span>
+                          <Lock className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                          <span className="text-xs font-medium text-[var(--color-badge-blue-text)]">內網</span>
                         </div>
                         <div className="space-y-1">
                           {internalDevices.map((d) => (
-                            <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-blue-50/50 rounded text-sm">
+                            <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-primary-dim)]/50 rounded text-sm">
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
                                 <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
-                              <button onClick={() => removeDevice(unit.id, d.id)} className="text-red-400 hover:text-red-600 p-0.5">
+                              <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
@@ -370,16 +370,16 @@ export default function OrganizationsPage() {
                       <div>
                         <div className="flex items-center gap-1 mb-2">
                           <Globe className="w-3.5 h-3.5 text-orange-600" />
-                          <span className="text-xs font-medium text-orange-700">外網</span>
+                          <span className="text-xs font-medium text-[var(--color-warning)]">外網</span>
                         </div>
                         <div className="space-y-1">
                           {externalDevices.map((d) => (
-                            <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-orange-50/50 rounded text-sm">
+                            <div key={d.id} className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-warning-dim)] rounded text-sm">
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
                                 <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
-                              <button onClick={() => removeDevice(unit.id, d.id)} className="text-red-400 hover:text-red-600 p-0.5">
+                              <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
@@ -394,10 +394,10 @@ export default function OrganizationsPage() {
                   <div className="px-4 py-3 border-t border-[var(--color-border)]">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium flex items-center gap-2">
-                        <Cable className="w-4 h-4 text-green-500" /> 電路
+                        <Cable className="w-4 h-4 text-[var(--color-success)]" /> 電路
                       </h4>
                       <button onClick={() => openAddCircuit(unit.id)}
-                        className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded hover:bg-green-100 flex items-center gap-1">
+                        className="text-xs px-2 py-1 bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)] rounded hover:bg-[var(--color-badge-green)] flex items-center gap-1">
                         <Plus className="w-3 h-3" /> 新增電路
                       </button>
                     </div>
@@ -416,11 +416,11 @@ export default function OrganizationsPage() {
                             <tr key={c.id} className="border-t border-[var(--color-border)]/50">
                               <td className="py-1.5 font-mono">{c.circuit_number}</td>
                               <td className="py-1.5">
-                                <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded">{c.bandwidth}</span>
+                                <span className="text-xs px-2 py-0.5 bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)] rounded">{c.bandwidth}</span>
                               </td>
                               <td className="py-1.5 text-[var(--color-text-muted)]">{c.ip_address || '-'}</td>
                               <td className="py-1.5 text-right">
-                                <button onClick={() => removeCircuit(unit.id, c.id)} className="text-red-400 hover:text-red-600 p-0.5">
+                                <button onClick={() => removeCircuit(unit.id, c.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               </td>
@@ -462,8 +462,8 @@ export default function OrganizationsPage() {
               {Object.entries(UNIT_TYPE_LABELS).map(([k, v]) => (
                 <button key={k} onClick={() => setFormType(k as UnitType)}
                   className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formType === k
-                    ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
-                    : 'border-[var(--color-border)] hover:bg-gray-50'}`}>
+                    ? 'bg-[var(--color-primary-dim)] border-[var(--color-primary)] text-[var(--color-badge-blue-text)] font-medium'
+                    : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
                   {v}
                 </button>
               ))}
@@ -472,19 +472,19 @@ export default function OrganizationsPage() {
 
           {/* Auto-create devices preview */}
           {!editingId && (
-            <div className="bg-gray-50 rounded-lg p-3">
+            <div className="bg-[var(--color-table-header)] rounded-lg p-3">
               <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2 flex items-center gap-1">
                 <Shield className="w-3.5 h-3.5" /> 將自動建立以下設備
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <div className="font-medium text-blue-700 mb-1"><Lock className="w-3 h-3 inline mr-1" />內網</div>
+                  <div className="font-medium text-[var(--color-badge-blue-text)] mb-1"><Lock className="w-3 h-3 inline mr-1" />內網</div>
                   {(formType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES).map((dt) => (
                     <div key={dt} className="text-[var(--color-text-muted)] pl-4">• {dt}</div>
                   ))}
                 </div>
                 <div>
-                  <div className="font-medium text-orange-700 mb-1"><Globe className="w-3 h-3 inline mr-1" />外網</div>
+                  <div className="font-medium text-[var(--color-warning)] mb-1"><Globe className="w-3 h-3 inline mr-1" />外網</div>
                   {(formType === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES).map((dt) => (
                     <div key={dt} className="text-[var(--color-text-muted)] pl-4">• {dt}</div>
                   ))}
@@ -499,7 +499,7 @@ export default function OrganizationsPage() {
               <label className="text-sm font-medium flex items-center gap-1">
                 <Cable className="w-4 h-4" /> 電路設定
               </label>
-              <button onClick={addCircuitRow} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded hover:bg-green-100 flex items-center gap-1">
+              <button onClick={addCircuitRow} className="text-xs px-2 py-1 bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)] rounded hover:bg-[var(--color-badge-green)] flex items-center gap-1">
                 <Plus className="w-3 h-3" /> 新增電路
               </button>
             </div>
@@ -529,7 +529,7 @@ export default function OrganizationsPage() {
                       className="w-32 px-2 py-1.5 border border-[var(--color-border)] rounded text-sm"
                       placeholder="IP Address"
                     />
-                    <button onClick={() => removeCircuitRow(idx)} className="p-1 text-red-400 hover:text-red-600">
+                    <button onClick={() => removeCircuitRow(idx)} className="p-1 text-[var(--color-danger)] hover:text-[var(--color-danger)]">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -539,7 +539,7 @@ export default function OrganizationsPage() {
           </div>
 
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={save} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">
               {editingId ? '更新' : '新增'}
             </button>
@@ -566,7 +566,7 @@ export default function OrganizationsPage() {
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" placeholder="e.g. 192.168.1.1" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowCircuitModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowCircuitModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveCircuit} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">新增</button>
           </div>
         </div>

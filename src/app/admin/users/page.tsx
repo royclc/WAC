@@ -93,7 +93,7 @@ export default function UsersPage() {
       <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-gray-50">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
               <th className="text-left px-4 py-3 font-medium">姓名</th>
               <th className="text-left px-4 py-3 font-medium">Email</th>
               <th className="text-left px-4 py-3 font-medium">角色</th>
@@ -104,7 +104,7 @@ export default function UsersPage() {
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className={`border-b border-[var(--color-border)] hover:bg-gray-50 ${!user.is_active ? 'opacity-50' : ''}`}>
+              <tr key={user.id} className={`border-b border-[var(--color-border)] hover:bg-[var(--color-hover)] ${!user.is_active ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 font-medium">{user.name}</td>
                 <td className="px-4 py-3 text-[var(--color-text-muted)]">{user.email}</td>
                 <td className="px-4 py-3">
@@ -113,7 +113,7 @@ export default function UsersPage() {
                       <Shield className="w-3 h-3" /> 管理員
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">
                       <User className="w-3 h-3" /> 使用者
                     </span>
                   )}
@@ -122,14 +122,14 @@ export default function UsersPage() {
                 <td className="px-4 py-3">
                   <button
                     onClick={() => toggleActive(user.id)}
-                    className={`text-xs px-2 py-0.5 rounded-full ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
+                    className={`text-xs px-2 py-0.5 rounded-full ${user.is_active ? 'bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)]' : 'bg-[var(--color-badge-red)] text-[var(--color-badge-red-text)]'}`}
                   >
                     {user.is_active ? '啟用' : '停用'}
                   </button>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => openEdit(user)} className="p-1 hover:bg-gray-100 rounded mr-1"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => deleteUser(user.id)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(user)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => deleteUser(user.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
                 </td>
               </tr>
             ))}
@@ -163,7 +163,7 @@ export default function UsersPage() {
             <input value={formDept} onChange={(e) => setFormDept(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveUser} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>

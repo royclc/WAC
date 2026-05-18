@@ -44,22 +44,22 @@ export default function YearMonthPicker({ currentDate, onChange }: YearMonthPick
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50 transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] transition-colors"
       >
         <CalendarDays className="w-4 h-4 text-[var(--color-text-muted)]" />
-        <span className="font-medium">{rocYear}年{currentMonth + 1}月</span>
+        <span className="font-medium text-[var(--color-text)]">{rocYear}年{currentMonth + 1}月</span>
       </button>
 
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 bg-white rounded-xl shadow-xl border border-[var(--color-border)] p-3 w-[280px]">
+        <div className="absolute top-full mt-1 left-0 z-50 bg-[var(--color-card)] rounded-xl shadow-2xl border border-[var(--color-border)] p-3 w-[280px]">
           {/* Year selector */}
           <div className="flex items-center justify-between mb-3">
-            <button onClick={() => setPickerYear(pickerYear - 1)} className="p-1 hover:bg-gray-100 rounded">
-              <ChevronLeft className="w-4 h-4" />
+            <button onClick={() => setPickerYear(pickerYear - 1)} className="p-1 hover:bg-[var(--color-hover)] rounded">
+              <ChevronLeft className="w-4 h-4 text-[var(--color-text-muted)]" />
             </button>
-            <span className="font-semibold text-sm">{pickerYear - 1911}年 ({pickerYear})</span>
-            <button onClick={() => setPickerYear(pickerYear + 1)} className="p-1 hover:bg-gray-100 rounded">
-              <ChevronRight className="w-4 h-4" />
+            <span className="font-semibold text-sm text-[var(--color-text)]">{pickerYear - 1911}年 ({pickerYear})</span>
+            <button onClick={() => setPickerYear(pickerYear + 1)} className="p-1 hover:bg-[var(--color-hover)] rounded">
+              <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]" />
             </button>
           </div>
 
@@ -76,8 +76,8 @@ export default function YearMonthPicker({ currentDate, onChange }: YearMonthPick
                     isSelected
                       ? 'bg-[var(--color-primary)] text-white font-medium'
                       : isCurrentMonth
-                        ? 'border border-[var(--color-primary)] text-[var(--color-primary)]'
-                        : 'hover:bg-gray-100'
+                        ? 'border border-[var(--color-primary)] text-[var(--color-primary-text)]'
+                        : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]'
                   }`}
                 >
                   {label}
@@ -89,7 +89,7 @@ export default function YearMonthPicker({ currentDate, onChange }: YearMonthPick
           {/* Today button */}
           <button
             onClick={goToToday}
-            className="w-full mt-2 py-1.5 text-xs text-[var(--color-primary)] border border-[var(--color-border)] rounded-lg hover:bg-blue-50"
+            className="w-full mt-2 py-1.5 text-xs text-[var(--color-primary-text)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-primary-dim)]"
           >
             回到今天
           </button>

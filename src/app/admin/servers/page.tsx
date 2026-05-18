@@ -135,7 +135,7 @@ export default function ServersPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">硬體管理</h1>
         <div className="flex gap-2">
-          <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50 flex items-center gap-1">
+          <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
             <Upload className="w-4 h-4" /> 匯入
           </button>
           <button onClick={openNew} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
@@ -150,7 +150,7 @@ export default function ServersPage() {
           <div className="text-sm text-[var(--color-text-muted)]">總硬體數</div>
         </div>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
-          <div className="text-2xl font-bold text-blue-600">{x86Count}</div>
+          <div className="text-2xl font-bold text-[var(--color-primary)]">{x86Count}</div>
           <div className="text-sm text-[var(--color-text-muted)]">x86伺服器</div>
         </div>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
@@ -163,7 +163,7 @@ export default function ServersPage() {
         <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
           {[{ k: 'all', l: '全部' }, { k: 'x86_server', l: 'x86伺服器' }, { k: 'storage', l: '儲存裝置' }].map(({ k, l }) => (
             <button key={k} onClick={() => setFilterCategory(k as 'all' | HardwareCategory)}
-              className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-gray-50'}`}>
+              className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>
               {l}
             </button>
           ))}
@@ -177,7 +177,7 @@ export default function ServersPage() {
       <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-gray-50">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
               <th className="text-left px-4 py-3 font-medium">名稱</th>
               <th className="text-left px-4 py-3 font-medium">型號</th>
               <th className="text-left px-4 py-3 font-medium">廠商</th>
@@ -197,7 +197,7 @@ export default function ServersPage() {
                   <tr>
                     <td colSpan={7} className="p-0">
                       <button onClick={() => toggleGroup(catKey)}
-                        className={`flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium transition-colors ${cat === 'x86_server' ? 'bg-blue-50 hover:bg-blue-100 text-blue-800' : 'bg-purple-50 hover:bg-purple-100 text-purple-800'}`}>
+                        className={`flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium transition-colors ${cat === 'x86_server' ? 'bg-[var(--color-primary-dim)] hover:bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]' : 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-300'}`}>
                         {expandedGroups.has(catKey) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         <CategoryIcon cat={cat} />
                         {CATEGORY_LABELS[cat]}
@@ -206,20 +206,20 @@ export default function ServersPage() {
                     </td>
                   </tr>
                   {expandedGroups.has(catKey) && items.map((asset) => (
-                    <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                    <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
                       <td className="px-4 py-3 pl-10 font-medium">
                         <CategoryIcon cat={asset.category} />{' '}{asset.name}
                       </td>
                       <td className="px-4 py-3 text-sm">{asset.model}</td>
                       <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{asset.vendor}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{asset.vendor}</span>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">{asset.ip_address}</td>
                       <td className="px-4 py-3">{asset.location}</td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">{asset.description}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => openEdit(asset)} className="p-1 hover:bg-gray-100 rounded mr-1"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => deleteAsset(asset.id)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => openEdit(asset)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => deleteAsset(asset.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
                       </td>
                     </tr>
                   ))}
@@ -274,7 +274,7 @@ export default function ServersPage() {
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveAsset} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>
@@ -283,13 +283,13 @@ export default function ServersPage() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title="匯入硬體清單">
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-muted)]">
-            每行一筆：<code className="text-xs bg-gray-100 px-1 rounded">名稱,類別(x86_server/storage),型號,廠商,IP,位置,說明</code>
+            每行一筆：<code className="text-xs bg-[var(--color-bg-elevated)] px-1 rounded">名稱,類別(x86_server/storage),型號,廠商,IP,位置,說明</code>
           </p>
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={6}
             placeholder={`Web Server 03,x86_server,HPE 380,HPE,192.168.1.12,機房A,備援伺服器`}
             className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono text-xs" />
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={handleImport} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">匯入</button>
           </div>
         </div>

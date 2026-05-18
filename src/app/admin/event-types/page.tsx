@@ -78,14 +78,14 @@ export default function EventTypesPage() {
       </div>
 
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl px-4 py-3 mb-6">
-        <span className="text-2xl font-bold text-blue-600">{types.length}</span>
+        <span className="text-2xl font-bold text-[var(--color-primary)]">{types.length}</span>
         <span className="text-sm text-[var(--color-text-muted)] ml-2">種事件類型</span>
       </div>
 
       <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] bg-gray-50">
+            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
               <th className="text-left px-4 py-3 font-medium">顏色</th>
               <th className="text-left px-4 py-3 font-medium">代碼</th>
               <th className="text-left px-4 py-3 font-medium">名稱</th>
@@ -94,7 +94,7 @@ export default function EventTypesPage() {
           </thead>
           <tbody>
             {types.map((t) => (
-              <tr key={t.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+              <tr key={t.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: t.color }} />
@@ -106,8 +106,8 @@ export default function EventTypesPage() {
                   {t.label}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => openEdit(t)} className="p-1 hover:bg-gray-100 rounded mr-1"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => remove(t.id)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(t)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => remove(t.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
                 </td>
               </tr>
             ))}
@@ -142,7 +142,7 @@ export default function EventTypesPage() {
             <span className="text-xs px-3 py-1 rounded-full text-white" style={{ backgroundColor: formColor }}>{formLabel || '名稱'}</span>
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={save} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>

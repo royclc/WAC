@@ -211,21 +211,21 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
         {/* Calendar */}
         <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden mb-6">
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold">{formatMonthTitle(currentMonth)}</h2>
               <YearMonthPicker currentDate={currentMonth} onChange={setCurrentMonth} />
             </div>
-            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-gray-100 rounded-lg">
+            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
           <div className="grid grid-cols-7 border-b border-[var(--color-border)]">
             {WEEKDAYS.map((day, i) => (
-              <div key={day} className={`text-center text-sm font-medium py-3 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-[var(--color-text-muted)]'}`}>
+              <div key={day} className={`text-center text-sm font-medium py-3 ${i === 0 ? 'text-[var(--color-weekend-sun)]' : i === 6 ? 'text-[var(--color-weekend-sat)]' : 'text-[var(--color-text-muted)]'}`}>
                 {day}
               </div>
             ))}
@@ -245,15 +245,15 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   key={idx}
                   onClick={() => setSelectedDate(date)}
                   className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${
-                    !inMonth ? 'bg-gray-50' : hasDowntime ? 'bg-red-50/50' : 'hover:bg-blue-50/30'
+                    !inMonth ? 'bg-[var(--color-bg-elevated)]' : hasDowntime ? 'bg-[var(--color-badge-red)]/50' : 'hover:bg-[var(--color-primary-dim)]'
                   } ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-gray-300' : ''} ${dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : ''}`}>
+                    <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${dayOfWeek === 0 ? 'text-[var(--color-weekend-sun)]' : dayOfWeek === 6 ? 'text-[var(--color-weekend-sat)]' : ''}`}>
                       {format(date, 'd')}
                     </span>
                     {dayEvents.length > 0 && (
-                      <AlertTriangle className={`w-4 h-4 ${hasDowntime ? 'text-red-500' : 'text-amber-500'}`} />
+                      <AlertTriangle className={`w-4 h-4 ${hasDowntime ? 'text-[var(--color-danger)]' : 'text-[var(--color-warning)]'}`} />
                     )}
                   </div>
                   <div className="space-y-0.5">
@@ -279,7 +279,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[var(--color-border)] bg-gray-50">
+              <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                 <th className="text-left px-4 py-3 font-medium">設備名稱</th>
                 {assets.some((a) => a.group) && <th className="text-left px-4 py-3 font-medium">單位</th>}
                 <th className="text-right px-4 py-3 font-medium">總時數</th>
@@ -291,17 +291,17 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
             </thead>
             <tbody>
               {monthStats.map(({ asset, totalHours, downtimeHours, uptimeHours, pct, eventCount }) => (
-                <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                   <td className="px-4 py-3">
                     <div className="font-medium">{asset.name}</div>
                     {asset.ip_address && <div className="text-xs text-[var(--color-text-muted)]">{asset.ip_address}</div>}
                   </td>
                   {assets.some((a) => a.group) && <td className="px-4 py-3 text-sm">{asset.group || '-'}</td>}
                   <td className="text-right px-4 py-3">{totalHours}h</td>
-                  <td className="text-right px-4 py-3 text-red-600">{downtimeHours}h</td>
-                  <td className="text-right px-4 py-3 text-green-600">{uptimeHours}h</td>
+                  <td className="text-right px-4 py-3 text-[var(--color-danger)]">{downtimeHours}h</td>
+                  <td className="text-right px-4 py-3 text-[var(--color-badge-green-text)]">{uptimeHours}h</td>
                   <td className="text-right px-4 py-3">
-                    <span className={`font-semibold ${pct >= 99.9 ? 'text-green-600' : pct >= 99 ? 'text-amber-600' : 'text-red-600'}`}>
+                    <span className={`font-semibold ${pct >= 99.9 ? 'text-[var(--color-badge-green-text)]' : pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                       {pct}%
                     </span>
                   </td>
@@ -379,7 +379,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[var(--color-border)] bg-gray-50">
+                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                       <th className="text-left px-4 py-3 font-medium">事件類型</th>
                       <th className="text-left px-4 py-3 font-medium">設備</th>
                       <th className="text-left px-4 py-3 font-medium">開始時間</th>
@@ -389,7 +389,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   </thead>
                   <tbody>
                     {quarterEvents.map((e) => (
-                      <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-gray-50">
+                      <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
                             {EVENT_TYPE_LABELS[e.event_type]}
@@ -414,7 +414,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
         <div className="w-80 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 h-fit sticky top-6">
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
           {selectedDayEvents.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-green-600">
+            <div className="flex items-center gap-2 text-sm text-[var(--color-badge-green-text)]">
               <CheckCircle className="w-4 h-4" /> 當日無斷線事件
             </div>
           ) : (
@@ -425,7 +425,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                     <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
                       {EVENT_TYPE_LABELS[e.event_type]}
                     </span>
-                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-red-500 text-xs">刪除</button>
+                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] text-xs">刪除</button>
                   </div>
                   <div className="font-medium text-sm mt-1">{e.title}</div>
                   <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
@@ -439,7 +439,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           )}
           <button
             onClick={() => openNewEvent(selectedDate)}
-            className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-gray-50"
+            className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]"
           >
             + 新增事件
           </button>
@@ -495,7 +495,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-gray-50">取消</button>
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveEvent} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
           </div>
         </div>
