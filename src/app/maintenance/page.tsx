@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
 import YearMonthPicker from '@/components/YearMonthPicker'
-import { ChevronLeft, ChevronRight, Plus, Wrench, Trash2, CheckCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Wrench, Trash2, CheckCircle, Loader2 } from 'lucide-react'
 import {
   getCalendarDays,
   formatMonthTitle,
@@ -16,21 +16,24 @@ import {
   format,
   WEEKDAYS,
 } from '@/lib/calendar-utils'
+import { supabase } from '@/lib/supabase'
 
-type MaintenanceCategory = 'hvac' | 'fire' | 'electrical' | 'generator' | 'server' | 'network'
+interface MaintenanceCategoryDef {
+  id: string
+  key: string
+  label: string
+  color: string
+  sort_order: number
+}
 
-const CATEGORIES: Record<MaintenanceCategory, { label: string; color: string }> = {
-  hvac:       { label: '空調', color: '#3B82F6' },
-  fire:       { label: '消防', color: '#EF4444' },
-  electrical: { label: '機電', color: '#F59E0B' },
-  generator:  { label: '發電機', color: '#8B5CF6' },
-  server:     { label: '伺服器', color: '#10B981' },
-  network:    { label: '網路設備', color: '#06B6D4' },
+interface VendorItem {
+  id: string
+  name: string
 }
 
 interface MaintenanceEvent {
   id: string
-  category: MaintenanceCategory
+  category_key: string
   title: string
   description: string
   event_date: string
@@ -38,31 +41,68 @@ interface MaintenanceEvent {
   is_completed: boolean
 }
 
-const DEMO_EVENTS: MaintenanceEvent[] = [
-  { id: '1', category: 'hvac', title: '冷氣主機年度保養', description: '更換冷媒、清洗濾網', event_date: format(new Date(), 'yyyy-MM-dd'), contractor: '大金空調', is_completed: false },
-  { id: '2', category: 'fire', title: '消防設備檢查', description: '滅火器、偵煙器檢測', event_date: format(new Date(), 'yyyy-MM-dd'), contractor: '永安消防', is_completed: true },
-  { id: '3', category: 'generator', title: '發電機月保養', description: '試運轉、油量檢查', event_date: format(new Date(new Date().setDate(new Date().getDate() + 3)), 'yyyy-MM-dd'), contractor: '台電機電', is_completed: false },
-]
-
 export default function MaintenancePage() {
+  const [categories, setCategories] = useState<MaintenanceCategoryDef[]>([])
+  const [vendors, setVendors] = useState<VendorItem[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [events, setEvents] = useState<MaintenanceEvent[]>(DEMO_EVENTS)
+  const [events, setEvents] = useState<MaintenanceEvent[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [filterCategory, setFilterCategory] = useState<MaintenanceCategory | 'all'>('all')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   // Form state
-  const [formCategory, setFormCategory] = useState<MaintenanceCategory>('hvac')
+  const [formCategory, setFormCategory] = useState('')
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formDate, setFormDate] = useState('')
   const [formContractor, setFormContractor] = useState('')
 
+  // ── Fetch data from Supabase ──
+  const fetchCategories = useCallback(async () => {
+    const { data } = await supabase
+      .from('maintenance_categories')
+      .select('id, key, label, color, sort_order')
+      .order('sort_order')
+    if (data) setCategories(data)
+  }, [])
+
+  const fetchVendors = useCallback(async () => {
+    const { data } = await supabase
+      .from('vendors')
+      .select('id, name')
+      .order('name')
+    if (data) setVendors(data)
+  }, [])
+
+  const fetchEvents = useCallback(async () => {
+    const { data } = await supabase
+      .from('maintenance_events')
+      .select('id, category_key, title, description, event_date, contractor, is_completed')
+      .order('event_date')
+    if (data) setEvents(data)
+  }, [])
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true)
+      await Promise.all([fetchCategories(), fetchVendors(), fetchEvents()])
+      setLoading(false)
+    }
+    init()
+  }, [fetchCategories, fetchVendors, fetchEvents])
+
+  // Helper: get category info
+  function getCat(key: string) {
+    return categories.find((c) => c.key === key)
+  }
+
   const days = getCalendarDays(currentMonth)
 
   const filteredEvents = filterCategory === 'all'
     ? events
-    : events.filter((e) => e.category === filterCategory)
+    : events.filter((e) => e.category_key === filterCategory)
 
   function getEventsForDay(date: Date) {
     const dateStr = format(date, 'yyyy-MM-dd')
@@ -73,20 +113,20 @@ export default function MaintenancePage() {
   const monthlySummary = useMemo(() => {
     const monthStr = format(currentMonth, 'yyyy-MM')
     const monthEvents = events.filter((e) => e.event_date.startsWith(monthStr))
-    const byCategory = Object.entries(CATEGORIES).map(([key, { label }]) => {
-      const catEvents = monthEvents.filter((e) => e.category === key)
+    const byCategory = categories.map((cat) => {
+      const catEvents = monthEvents.filter((e) => e.category_key === cat.key)
       return {
-        key,
-        label,
+        key: cat.key,
+        label: cat.label,
         total: catEvents.length,
         completed: catEvents.filter((e) => e.is_completed).length,
       }
     }).filter((c) => c.total > 0)
     return { total: monthEvents.length, completed: monthEvents.filter((e) => e.is_completed).length, byCategory }
-  }, [currentMonth, events])
+  }, [currentMonth, events, categories])
 
   function openNewEvent(date?: Date) {
-    setFormCategory('hvac')
+    setFormCategory(categories[0]?.key || '')
     setFormTitle('')
     setFormDesc('')
     setFormDate(date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
@@ -94,32 +134,73 @@ export default function MaintenancePage() {
     setShowModal(true)
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (!formTitle || !formDate) return
-    const newEvent: MaintenanceEvent = {
-      id: crypto.randomUUID(),
-      category: formCategory,
-      title: formTitle,
-      description: formDesc,
-      event_date: formDate,
-      contractor: formContractor,
-      is_completed: false,
+    setSaving(true)
+    const { data, error } = await supabase
+      .from('maintenance_events')
+      .insert({
+        category_key: formCategory,
+        title: formTitle,
+        description: formDesc,
+        event_date: formDate,
+        contractor: formContractor,
+        is_completed: false,
+      })
+      .select()
+      .single()
+    setSaving(false)
+    if (error) {
+      console.error('Failed to save event:', error)
+      return
     }
-    setEvents([...events, newEvent])
+    if (data) setEvents([...events, data])
     setShowModal(false)
   }
 
-  function toggleComplete(id: string) {
-    setEvents(events.map((e) => (e.id === id ? { ...e, is_completed: !e.is_completed } : e)))
+  async function toggleComplete(id: string) {
+    const ev = events.find((e) => e.id === id)
+    if (!ev) return
+    const newVal = !ev.is_completed
+    // Optimistic update
+    setEvents(events.map((e) => (e.id === id ? { ...e, is_completed: newVal } : e)))
+    const { error } = await supabase
+      .from('maintenance_events')
+      .update({ is_completed: newVal })
+      .eq('id', id)
+    if (error) {
+      console.error('Failed to toggle complete:', error)
+      // Revert on error
+      setEvents(events.map((e) => (e.id === id ? { ...e, is_completed: !newVal } : e)))
+    }
   }
 
-  function deleteEvent(id: string) {
+  async function deleteEvent(id: string) {
+    const prev = events
     setEvents(events.filter((e) => e.id !== id))
+    const { error } = await supabase
+      .from('maintenance_events')
+      .delete()
+      .eq('id', id)
+    if (error) {
+      console.error('Failed to delete event:', error)
+      setEvents(prev)
+    }
   }
 
   const selectedDayEvents = selectedDate
     ? getEventsForDay(selectedDate)
     : []
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" />
+        </div>
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell>
@@ -147,18 +228,18 @@ export default function MaintenancePage() {
             >
               全部
             </button>
-            {Object.entries(CATEGORIES).map(([key, { label, color }]) => (
+            {categories.map((cat) => (
               <button
-                key={key}
-                onClick={() => setFilterCategory(key as MaintenanceCategory)}
+                key={cat.key}
+                onClick={() => setFilterCategory(cat.key)}
                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                  filterCategory === key
+                  filterCategory === cat.key
                     ? 'text-white border-transparent'
                     : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'
                 }`}
-                style={filterCategory === key ? { backgroundColor: color } : undefined}
+                style={filterCategory === cat.key ? { backgroundColor: cat.color } : undefined}
               >
-                {label}
+                {cat.label}
               </button>
             ))}
           </div>
@@ -215,7 +296,7 @@ export default function MaintenancePage() {
                         <div
                           key={e.id}
                           className={`text-xs px-1.5 py-0.5 rounded truncate text-white flex items-center gap-1 ${e.is_completed ? 'opacity-60' : ''}`}
-                          style={{ backgroundColor: CATEGORIES[e.category].color }}
+                          style={{ backgroundColor: getCat(e.category_key)?.color || '#6B7280' }}
                         >
                           {e.is_completed && <CheckCircle className="w-3 h-3 shrink-0" />}
                           <span className="truncate">{e.title}</span>
@@ -333,8 +414,8 @@ export default function MaintenancePage() {
                       {quarterEvents.map((e) => (
                         <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                           <td className="px-4 py-3">
-                            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: CATEGORIES[e.category].color }}>
-                              {CATEGORIES[e.category].label}
+                            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: getCat(e.category_key)?.color || '#6B7280' }}>
+                              {getCat(e.category_key)?.label || e.category_key}
                             </span>
                           </td>
                           <td className="px-4 py-3">{e.title}</td>
@@ -369,9 +450,9 @@ export default function MaintenancePage() {
                     <div className="flex items-center justify-between mb-1">
                       <span
                         className="text-xs px-2 py-0.5 rounded-full text-white"
-                        style={{ backgroundColor: CATEGORIES[e.category].color }}
+                        style={{ backgroundColor: getCat(e.category_key)?.color || '#6B7280' }}
                       >
-                        {CATEGORIES[e.category].label}
+                        {getCat(e.category_key)?.label || e.category_key}
                       </span>
                       <div className="flex items-center gap-1">
                         <button
@@ -407,9 +488,9 @@ export default function MaintenancePage() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">保養類別 *</label>
-            <select value={formCategory} onChange={(e) => setFormCategory(e.target.value as MaintenanceCategory)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {Object.entries(CATEGORIES).map(([k, { label }]) => (
-                <option key={k} value={k}>{label}</option>
+            <select value={formCategory} onChange={(e) => setFormCategory(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
+              {categories.map((cat) => (
+                <option key={cat.key} value={cat.key}>{cat.label}</option>
               ))}
             </select>
           </div>
@@ -422,8 +503,14 @@ export default function MaintenancePage() {
             <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">廠商</label>
-            <input value={formContractor} onChange={(e) => setFormContractor(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" placeholder="例：大金空調" />
+            <label className="block text-sm font-medium mb-1">廠商 *</label>
+            <select value={formContractor} onChange={(e) => setFormContractor(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
+              <option value="">請選擇廠商</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.name}>{v.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">廠商清單來自「管理 &gt; 廠商管理」</p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">說明</label>
@@ -431,7 +518,14 @@ export default function MaintenancePage() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveEvent} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button
+              onClick={saveEvent}
+              disabled={saving}
+              className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              儲存
+            </button>
           </div>
         </div>
       </Modal>

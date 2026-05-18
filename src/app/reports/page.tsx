@@ -1,13 +1,14 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
-import { BarChart3, Wifi, HardDrive, ChevronDown, FileDown } from 'lucide-react'
+import { BarChart3, Wifi, HardDrive, ChevronDown, FileDown, Loader2 } from 'lucide-react'
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
   TextRun, WidthType, AlignmentType, BorderStyle,
 } from 'docx'
 import { saveAs } from 'file-saver'
+import { supabase } from '@/lib/supabase'
 
 // ── Types ──
 
@@ -61,93 +62,6 @@ interface ServerEvent {
   start_time: string
   end_time: string
 }
-
-// ── Demo Data ──
-
-const NETWORK_ASSETS: NetworkAsset[] = [
-  { id: 'hi1', name: '總局內網防火牆', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '防火牆', quantity: 2 },
-  { id: 'hi2', name: '總局內網核心網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '核心網路交換器', quantity: 2 },
-  { id: 'hi3', name: '總局內網主機網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '主機網路交換器', quantity: 8 },
-  { id: 'hi4', name: '總局內網邊界網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '邊界網路交換器', quantity: 2 },
-  { id: 'hi5', name: '總局內網聚合網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '聚合網路交換器', quantity: 4 },
-  { id: 'he1', name: '總局外網防火牆', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '防火牆', quantity: 2 },
-  { id: 'he2', name: '總局外網核心網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '核心網路交換器', quantity: 2 },
-  { id: 'he3', name: '總局外網主機網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '主機網路交換器', quantity: 4 },
-  { id: 'he4', name: '總局外網邊界網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '邊界網路交換器', quantity: 2 },
-  { id: 'he5', name: '總局外網聚合網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '聚合網路交換器', quantity: 2 },
-  { id: 'ai1', name: 'a稽徵所內網防火牆', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '防火牆', quantity: 1 },
-  { id: 'ai2', name: 'a稽徵所內網前端網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ai3', name: 'a稽徵所內網聚合網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'ae1', name: 'a稽徵所外網防火牆', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '防火牆', quantity: 1 },
-  { id: 'ae2', name: 'a稽徵所外網前端網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ae3', name: 'a稽徵所外網聚合網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'bi1', name: 'b分局內網防火牆', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '防火牆', quantity: 1 },
-  { id: 'bi2', name: 'b分局內網前端網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'bi3', name: 'b分局內網聚合網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'be1', name: 'b分局外網防火牆', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'external', deviceType: '防火牆', quantity: 1 },
-  { id: 'be2', name: 'b分局外網前端網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'external', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'be3', name: 'b分局外網聚合網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'external', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'ci1', name: 'c稽徵所內網防火牆', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '防火牆', quantity: 1 },
-  { id: 'ci2', name: 'c稽徵所內網前端網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ci3', name: 'c稽徵所內網聚合網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'ce1', name: 'c稽徵所外網防火牆', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '防火牆', quantity: 1 },
-  { id: 'ce2', name: 'c稽徵所外網前端網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ce3', name: 'c稽徵所外網聚合網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '聚合網路交換器', quantity: 1 },
-]
-
-const DEMO_EVENTS: DowntimeEvent[] = [
-  { id: 'de1', asset_id: 'ai1', plan_type: 'planned', title: '例行維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de2', asset_id: 'ai2', plan_type: 'planned', title: '例行維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de3', asset_id: 'ai3', plan_type: 'planned', title: '例行維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de4', asset_id: 'ae1', plan_type: 'planned', title: '例行維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de5', asset_id: 'ae2', plan_type: 'planned', title: '例行維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de6', asset_id: 'ae3', plan_type: 'planned', title: '例行維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de7', asset_id: 'bi1', plan_type: 'planned', title: '設備更新', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de8', asset_id: 'bi2', plan_type: 'planned', title: '設備更新', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de9', asset_id: 'bi3', plan_type: 'planned', title: '設備更新', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de10', asset_id: 'be1', plan_type: 'planned', title: '設備更新', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de11', asset_id: 'be2', plan_type: 'planned', title: '設備更新', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de12', asset_id: 'be3', plan_type: 'planned', title: '設備更新', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de13', asset_id: 'ci1', plan_type: 'planned', title: '線路維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de14', asset_id: 'ci2', plan_type: 'planned', title: '線路維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de15', asset_id: 'ci3', plan_type: 'planned', title: '線路維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de16', asset_id: 'ce1', plan_type: 'planned', title: '線路維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de17', asset_id: 'ce2', plan_type: 'planned', title: '線路維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-  { id: 'de18', asset_id: 'ce3', plan_type: 'planned', title: '線路維護', start_time: '2026-04-10T08:00', end_time: '2026-04-14T21:34' },
-]
-
-const DEMO_CIRCUITS: Circuit[] = [
-  { id: 'c1', unit: '總局', circuit_number: 'xxxxd', bandwidth: '200', ip_address: '' },
-  { id: 'c2', unit: '總局', circuit_number: 'Xxxdx', bandwidth: '200', ip_address: '' },
-  { id: 'c3', unit: '總局', circuit_number: 'Xx3', bandwidth: '100', ip_address: '' },
-  { id: 'c4', unit: '總局', circuit_number: 'Xxr', bandwidth: '100/40', ip_address: '' },
-  { id: 'c5', unit: 'b分局', circuit_number: 'Xe3', bandwidth: '50', ip_address: '' },
-  { id: 'c6', unit: 'b分局', circuit_number: 'Xee', bandwidth: '60', ip_address: '' },
-  { id: 'c7', unit: 'b分局', circuit_number: 'Xxssa', bandwidth: '70', ip_address: '' },
-  { id: 'c8', unit: 'a稽徵所', circuit_number: 'Xd', bandwidth: '80', ip_address: '' },
-  { id: 'c9', unit: 'a稽徵所', circuit_number: 'Xd', bandwidth: '90', ip_address: '' },
-  { id: 'c10', unit: 'a稽徵所', circuit_number: 'Xxbb', bandwidth: '80', ip_address: '' },
-  { id: 'c11', unit: 'c稽徵所', circuit_number: 'asdfaf', bandwidth: '70', ip_address: '' },
-  { id: 'c12', unit: 'c稽徵所', circuit_number: 'asdfa', bandwidth: '50', ip_address: '' },
-  { id: 'c13', unit: 'c稽徵所', circuit_number: 'bb', bandwidth: '60', ip_address: '' },
-]
-
-const DEMO_CIRCUIT_EVENTS: CircuitEvent[] = [
-  { id: 'ce1', circuit_id: 'c1', plan_type: 'planned', title: '大樓頂樓發電機設備汰換作業', start_time: '2026-04-11T18:00', end_time: '2026-04-12T19:00' },
-  { id: 'ce2', circuit_id: 'c2', plan_type: 'planned', title: '大樓頂樓發電機設備汰換作業', start_time: '2026-04-11T18:00', end_time: '2026-04-12T19:00' },
-  { id: 'ce3', circuit_id: 'c3', plan_type: 'planned', title: '大樓頂樓發電機設備汰換作業', start_time: '2026-04-11T18:00', end_time: '2026-04-12T19:00' },
-  { id: 'ce4', circuit_id: 'c4', plan_type: 'planned', title: '大樓頂樓發電機設備汰換作業', start_time: '2026-04-11T18:00', end_time: '2026-04-12T19:00' },
-]
-
-const SERVER_ASSETS: ServerAsset[] = [
-  { id: 'sv_int', name: '一般業務類(內網)', quantity: 4 },
-  { id: 'sv_ext', name: '一般業務類(外網)', quantity: 3 },
-]
-
-const DEMO_SERVER_EVENTS: ServerEvent[] = [
-  { id: 'se1', asset_id: 'sv_int', plan_type: 'planned', title: '系統更新', start_time: '2026-04-10T08:00', end_time: '2026-04-11T09:00' },
-  { id: 'se2', asset_id: 'sv_ext', plan_type: 'planned', title: '系統更新', start_time: '2026-04-10T08:00', end_time: '2026-04-11T09:00' },
-]
 
 // ── Quarter date utilities ──
 
@@ -401,7 +315,7 @@ interface DeviceGroup {
   assets: NetworkAsset[]
 }
 
-function getDeviceGroups(): DeviceGroup[] {
+function getDeviceGroups(networkAssets: NetworkAsset[]): DeviceGroup[] {
   const groups: DeviceGroup[] = []
   const hqZones: Array<{ zone: 'internal' | 'external'; label: string }> = [
     { zone: 'internal', label: '內網' },
@@ -412,7 +326,7 @@ function getDeviceGroups(): DeviceGroup[] {
 
   hqZones.forEach(({ zone, label: zoneLabel }) => {
     hqDeviceTypes.forEach((dt) => {
-      const matched = NETWORK_ASSETS.filter((a) => a.majorCategory === '總局' && a.zone === zone && a.deviceType === dt)
+      const matched = networkAssets.filter((a) => a.majorCategory === '總局' && a.zone === zone && a.deviceType === dt)
       if (matched.length > 0) {
         groups.push({ label: `總局${zoneLabel}${dt}`, assets: matched })
       }
@@ -420,13 +334,20 @@ function getDeviceGroups(): DeviceGroup[] {
   })
 
   branchDeviceTypes.forEach((dt) => {
-    const matched = NETWORK_ASSETS.filter((a) => a.majorCategory === '分局稽徵所' && a.deviceType === dt)
+    const matched = networkAssets.filter((a) => a.majorCategory === '分局稽徵所' && a.deviceType === dt)
     if (matched.length > 0) {
       groups.push({ label: `分局稽徵所${dt}`, assets: matched })
     }
   })
 
   return groups
+}
+
+// ── Org type to majorCategory mapping ──
+
+function orgTypeToMajorCategory(orgType: string): string {
+  if (orgType === '總局') return '總局'
+  return '分局稽徵所'
 }
 
 // ── Word export helpers ──
@@ -590,12 +511,141 @@ export default function ReportsPage() {
   const [mainTab, setMainTab] = useState<'hardware' | 'network'>('network')
   const [networkSubTab, setNetworkSubTab] = useState<'monthly' | 'fiber'>('monthly')
 
-  const events = DEMO_EVENTS
+  // ── Supabase data states ──
+  const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
+  const [downtimeEvents, setDowntimeEvents] = useState<DowntimeEvent[]>([])
+  const [circuits, setCircuits] = useState<Circuit[]>([])
+  const [circuitEvents, setCircuitEvents] = useState<CircuitEvent[]>([])
+  const [serverAssets, setServerAssets] = useState<ServerAsset[]>([])
+  const [serverEvents, setServerEvents] = useState<ServerEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // ── Fetch data from Supabase ──
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    try {
+      // Fetch all in parallel
+      const [
+        { data: orgDevices },
+        { data: orgs },
+        { data: orgCircuits },
+        { data: hwAssets },
+        { data: dtEvents },
+        { data: cEvents },
+      ] = await Promise.all([
+        supabase.from('org_devices').select('*'),
+        supabase.from('organizations').select('*'),
+        supabase.from('org_circuits').select('*'),
+        supabase.from('hardware_assets').select('*').eq('is_active', true),
+        supabase.from('downtime_events').select('*'),
+        supabase.from('circuit_events').select('*'),
+      ])
+
+      // Build org lookup
+      const orgMap = new Map<string, { name: string; type: string }>()
+      orgs?.forEach((o: { id: string; name: string; type: string }) => {
+        orgMap.set(o.id, { name: o.name, type: o.type })
+      })
+
+      // Map org_devices -> NetworkAsset
+      const mappedNetworkAssets: NetworkAsset[] = (orgDevices ?? []).map((d: {
+        id: string; org_id: string; name: string; zone: 'internal' | 'external'; device_type: string; vendor: string; quantity: number
+      }) => {
+        const org = orgMap.get(d.org_id)
+        return {
+          id: d.id,
+          name: d.name,
+          unit: org?.name ?? '',
+          majorCategory: org ? orgTypeToMajorCategory(org.type) : '',
+          zone: d.zone,
+          deviceType: d.device_type,
+          quantity: d.quantity,
+        }
+      })
+      setNetworkAssets(mappedNetworkAssets)
+
+      // Map downtime_events -> DowntimeEvent (asset_type = 'network')
+      const mappedDowntimeEvents: DowntimeEvent[] = (dtEvents ?? [])
+        .filter((e: { asset_type: string }) => e.asset_type === 'network')
+        .map((e: {
+          id: string; asset_id: string; plan_type: 'planned' | 'unplanned'; title: string; start_time: string; end_time: string
+        }) => ({
+          id: e.id,
+          asset_id: e.asset_id,
+          plan_type: e.plan_type,
+          title: e.title,
+          start_time: e.start_time,
+          end_time: e.end_time,
+        }))
+      setDowntimeEvents(mappedDowntimeEvents)
+
+      // Map org_circuits -> Circuit
+      const mappedCircuits: Circuit[] = (orgCircuits ?? []).map((c: {
+        id: string; org_id: string; circuit_number: string; bandwidth: string; ip_address: string
+      }) => {
+        const org = orgMap.get(c.org_id)
+        return {
+          id: c.id,
+          unit: org?.name ?? '',
+          circuit_number: c.circuit_number,
+          bandwidth: c.bandwidth,
+          ip_address: c.ip_address ?? '',
+        }
+      })
+      setCircuits(mappedCircuits)
+
+      // Map circuit_events -> CircuitEvent
+      const mappedCircuitEvents: CircuitEvent[] = (cEvents ?? []).map((e: {
+        id: string; circuit_id: string; plan_type: 'planned' | 'unplanned'; title: string; start_time: string; end_time: string
+      }) => ({
+        id: e.id,
+        circuit_id: e.circuit_id,
+        plan_type: e.plan_type,
+        title: e.title,
+        start_time: e.start_time,
+        end_time: e.end_time,
+      }))
+      setCircuitEvents(mappedCircuitEvents)
+
+      // Map hardware_assets -> ServerAsset (each row = 1 asset, quantity = 1)
+      const mappedServerAssets: ServerAsset[] = (hwAssets ?? []).map((h: {
+        id: string; name: string
+      }) => ({
+        id: h.id,
+        name: h.name,
+        quantity: 1,
+      }))
+      setServerAssets(mappedServerAssets)
+
+      // Map downtime_events (asset_type = 'server') -> ServerEvent
+      const mappedServerEvents: ServerEvent[] = (dtEvents ?? [])
+        .filter((e: { asset_type: string }) => e.asset_type === 'server')
+        .map((e: {
+          id: string; asset_id: string; plan_type: 'planned' | 'unplanned'; title: string; start_time: string; end_time: string
+        }) => ({
+          id: e.id,
+          asset_id: e.asset_id,
+          plan_type: e.plan_type,
+          title: e.title,
+          start_time: e.start_time,
+          end_time: e.end_time,
+        }))
+      setServerEvents(mappedServerEvents)
+    } catch (err) {
+      console.error('Failed to fetch report data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   // Quarter periods
   const quarterPeriods = useMemo(() => getQuarterMonthPeriods(rocYear, quarter), [rocYear, quarter])
   const quarterRange = useMemo(() => getQuarterRange(rocYear, quarter), [rocYear, quarter])
-  const deviceGroups = useMemo(() => getDeviceGroups(), [])
+  const deviceGroups = useMemo(() => getDeviceGroups(networkAssets), [networkAssets])
 
   const now = new Date()
 
@@ -607,7 +657,7 @@ export default function ReportsPage() {
         if (!isPast) {
           return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, availabilityPct: 0 }
         }
-        const stats = calcPeriodStats(group.assets, events, period.start, period.end)
+        const stats = calcPeriodStats(group.assets, downtimeEvents, period.start, period.end)
         return { period, hasData: true, ...stats }
       })
 
@@ -633,7 +683,7 @@ export default function ReportsPage() {
         },
       }
     })
-  }, [deviceGroups, quarterPeriods, events])
+  }, [deviceGroups, quarterPeriods, downtimeEvents])
 
   // ═══ Network: Part 2 - Monthly summary ═══
   const currentPeriodIndex = useMemo(() => {
@@ -647,39 +697,39 @@ export default function ReportsPage() {
     const period = quarterPeriods[currentPeriodIndex]
     if (!period) return []
     return deviceGroups.map((group) => {
-      const stats = calcPeriodStats(group.assets, events, period.start, period.end)
+      const stats = calcPeriodStats(group.assets, downtimeEvents, period.start, period.end)
       return { label: group.label, ...stats }
     })
-  }, [deviceGroups, quarterPeriods, currentPeriodIndex, events])
+  }, [deviceGroups, quarterPeriods, currentPeriodIndex, downtimeEvents])
 
   // ═══ Circuit summaries for fiber report ═══
   const circuitSummaryAll = useMemo(() => {
-    return getCircuitEventSummaries(DEMO_CIRCUITS, DEMO_CIRCUIT_EVENTS, quarterRange.start, quarterRange.end)
-  }, [quarterRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, quarterRange.start, quarterRange.end)
+  }, [circuits, circuitEvents, quarterRange])
 
   const circuitSummaryPlanned = useMemo(() => {
-    return getCircuitEventSummaries(DEMO_CIRCUITS, DEMO_CIRCUIT_EVENTS, quarterRange.start, quarterRange.end, 'planned')
-  }, [quarterRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, quarterRange.start, quarterRange.end, 'planned')
+  }, [circuits, circuitEvents, quarterRange])
 
   const circuitSummaryUnplanned = useMemo(() => {
-    return getCircuitEventSummaries(DEMO_CIRCUITS, DEMO_CIRCUIT_EVENTS, quarterRange.start, quarterRange.end, 'unplanned')
-  }, [quarterRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, quarterRange.start, quarterRange.end, 'unplanned')
+  }, [circuits, circuitEvents, quarterRange])
 
   // ═══ Server (hardware) stats ═══
   const serverMonthlySummary = useMemo(() => {
     const period = quarterPeriods[currentPeriodIndex]
     if (!period) return []
-    return calcServerPeriodStats(SERVER_ASSETS, DEMO_SERVER_EVENTS, period.start, period.end)
-  }, [quarterPeriods, currentPeriodIndex])
+    return calcServerPeriodStats(serverAssets, serverEvents, period.start, period.end)
+  }, [serverAssets, serverEvents, quarterPeriods, currentPeriodIndex])
 
   const serverQuarterlyReport = useMemo(() => {
-    return SERVER_ASSETS.map((asset, assetIdx) => {
+    return serverAssets.map((asset) => {
       const monthRows = quarterPeriods.map((period) => {
         const isPast = period.end < now || (period.start <= now && period.end >= now)
         if (!isPast) {
           return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, availabilityPct: 0 }
         }
-        const stats = calcServerPeriodStats([asset], DEMO_SERVER_EVENTS, period.start, period.end)
+        const stats = calcServerPeriodStats([asset], serverEvents, period.start, period.end)
         return { period, hasData: true, ...stats[0] }
       })
 
@@ -704,7 +754,7 @@ export default function ReportsPage() {
         },
       }
     })
-  }, [quarterPeriods])
+  }, [serverAssets, serverEvents, quarterPeriods])
 
   // ═══ Chart data for network ═══
   const networkChartData: ChartData[] = useMemo(() => {
@@ -717,14 +767,14 @@ export default function ReportsPage() {
       let unplanned = 0
       let totalH = 0
       deviceGroups.forEach((group) => {
-        const stats = calcPeriodStats(group.assets, events, period.start, period.end)
+        const stats = calcPeriodStats(group.assets, downtimeEvents, period.start, period.end)
         planned += stats.plannedHours
         unplanned += stats.unplannedHours
         totalH += stats.hoursPerDevice * stats.totalCount
       })
       return { month: displayMonth, planned, unplanned, totalHours: totalH }
     })
-  }, [quarterPeriods, deviceGroups, events])
+  }, [quarterPeriods, deviceGroups, downtimeEvents])
 
   // ═══ Chart data for hardware ═══
   const hardwareChartData: ChartData[] = useMemo(() => {
@@ -736,15 +786,15 @@ export default function ReportsPage() {
       let planned = 0
       let unplanned = 0
       let totalH = 0
-      SERVER_ASSETS.forEach((asset) => {
-        const stats = calcServerPeriodStats([asset], DEMO_SERVER_EVENTS, period.start, period.end)
+      serverAssets.forEach((asset) => {
+        const stats = calcServerPeriodStats([asset], serverEvents, period.start, period.end)
         planned += stats[0].plannedHours
         unplanned += stats[0].unplannedHours
         totalH += stats[0].totalHours
       })
       return { month: displayMonth, planned, unplanned, totalHours: totalH }
     })
-  }, [quarterPeriods])
+  }, [serverAssets, serverEvents, quarterPeriods])
 
   // ── Quarter header display ──
   const qRange = quarterRange
@@ -861,7 +911,7 @@ export default function ReportsPage() {
     serverMonthlySummary.forEach((row, idx) => {
       monthlyRows.push(new TableRow({
         children: [
-          docxCell(SERVER_ASSETS[idx].name, { bold: true }),
+          docxCell(serverAssets[idx]?.name ?? '', { bold: true }),
           docxCell(row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : `${row.hoursPerDevice}`, { alignment: AlignmentType.RIGHT }),
           docxCell(`${row.plannedHours}`, { alignment: AlignmentType.RIGHT }),
           docxCell(`${row.unplannedHours}`, { alignment: AlignmentType.RIGHT }),
@@ -1097,6 +1147,18 @@ export default function ReportsPage() {
     )
   }
 
+  // ── Loading state ──
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex flex-col items-center justify-center py-32 gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" />
+          <p className="text-sm text-[var(--color-text-muted)]">載入報表資料中...</p>
+        </div>
+      </AppShell>
+    )
+  }
+
   return (
     <AppShell>
       <div className="flex items-center justify-between mb-6">
@@ -1214,8 +1276,8 @@ export default function ReportsPage() {
               </thead>
               <tbody>
                 {serverMonthlySummary.map((row, idx) => (
-                  <tr key={SERVER_ASSETS[idx].id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
-                    <td className="px-4 py-3 font-medium">{SERVER_ASSETS[idx].name}</td>
+                  <tr key={serverAssets[idx]?.id ?? idx} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
+                    <td className="px-4 py-3 font-medium">{serverAssets[idx]?.name ?? ''}</td>
                     <td className="text-right px-4 py-3 font-mono text-xs">
                       {row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : row.hoursPerDevice}
                     </td>

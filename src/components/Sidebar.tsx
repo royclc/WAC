@@ -30,6 +30,7 @@ const navItems = [
 const adminItems = [
   { href: '/admin/organizations', label: '單位管理', icon: Landmark },
   { href: '/admin/servers', label: '硬體管理', icon: HardDrive },
+  { href: '/admin/maintenance', label: '保養類別管理', icon: Wrench },
   { href: '/admin/units', label: '網路管理', icon: Building2 },
   { href: '/admin/circuits', label: '線路管理', icon: Cable },
   { href: '/admin/vendors', label: '廠商管理', icon: Store },

@@ -1,29 +1,29 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Upload, Pencil, Trash2, Search, HardDrive, Server, Database, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Upload, Pencil, Trash2, Search, HardDrive, Server, Database, ChevronDown, ChevronRight, Settings, Tag, Loader2 } from 'lucide-react'
 
-type HardwareCategory = 'x86_server' | 'storage'
-type HardwareModel = string
+// ── Category / Model 管理 ──
 
-const CATEGORY_LABELS: Record<HardwareCategory, string> = {
-  x86_server: 'x86伺服器',
-  storage: '儲存裝置',
+interface CategoryDef {
+  id: string
+  key: string
+  label: string
+  models: ModelDef[]
 }
 
-const CATEGORY_MODELS: Record<HardwareCategory, string[]> = {
-  x86_server: ['HPE 380', 'HPE 360'],
-  storage: ['NetApp', '磁帶機'],
+interface ModelDef {
+  id: string
+  name: string
 }
-
-const VENDOR_OPTIONS = ['HPE', 'NetApp', '宏華', '其他']
 
 interface HardwareAsset {
   id: string
   name: string
-  category: HardwareCategory
+  category: string
   model: string
   vendor: string
   ip_address: string
@@ -32,32 +32,106 @@ interface HardwareAsset {
   is_active: boolean
 }
 
-const DEMO_HARDWARE: HardwareAsset[] = [
-  { id: 'h1', name: 'Web Server 01', category: 'x86_server', model: 'HPE 380', vendor: 'HPE', ip_address: '192.168.1.10', location: '機房A', description: '主要網頁伺服器', is_active: true },
-  { id: 'h2', name: 'DB Server 01', category: 'x86_server', model: 'HPE 380', vendor: 'HPE', ip_address: '192.168.1.20', location: '機房A', description: '資料庫伺服器', is_active: true },
-  { id: 'h3', name: 'AP Server 01', category: 'x86_server', model: 'HPE 360', vendor: 'HPE', ip_address: '192.168.1.30', location: '機房B', description: '應用程式伺服器', is_active: true },
-  { id: 'h4', name: 'AP Server 02', category: 'x86_server', model: 'HPE 360', vendor: 'HPE', ip_address: '192.168.1.31', location: '機房B', description: '備援應用伺服器', is_active: true },
-  { id: 'h5', name: 'NetApp FAS01', category: 'storage', model: 'NetApp', vendor: 'NetApp', ip_address: '192.168.1.50', location: '機房A', description: '主要儲存設備', is_active: true },
-  { id: 'h6', name: '備份磁帶機 01', category: 'storage', model: '磁帶機', vendor: 'HPE', ip_address: '192.168.1.60', location: '機房A', description: '磁帶備份裝置', is_active: true },
-]
+type PageTab = 'assets' | 'categories'
 
 export default function ServersPage() {
-  const [assets, setAssets] = useState<HardwareAsset[]>(DEMO_HARDWARE)
+  const [pageTab, setPageTab] = useState<PageTab>('assets')
+  const [categories, setCategories] = useState<CategoryDef[]>([])
+  const [assets, setAssets] = useState<HardwareAsset[]>([])
+  const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState<'all' | HardwareCategory>('all')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [editingAsset, setEditingAsset] = useState<HardwareAsset | null>(null)
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['x86_server', 'storage']))
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [importText, setImportText] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   const [formName, setFormName] = useState('')
-  const [formCategory, setFormCategory] = useState<HardwareCategory>('x86_server')
+  const [formCategory, setFormCategory] = useState('')
   const [formModel, setFormModel] = useState('')
   const [formVendor, setFormVendor] = useState('')
   const [formIp, setFormIp] = useState('')
   const [formLocation, setFormLocation] = useState('')
   const [formDesc, setFormDesc] = useState('')
+
+  // Category/Model management state
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [editingCat, setEditingCat] = useState<CategoryDef | null>(null)
+  const [catFormLabel, setCatFormLabel] = useState('')
+  const [catFormKey, setCatFormKey] = useState('')
+
+  const [showModelModal, setShowModelModal] = useState(false)
+  const [editingModel, setEditingModel] = useState<{ catId: string; model: ModelDef } | null>(null)
+  const [modelFormName, setModelFormName] = useState('')
+  const [modelTargetCatId, setModelTargetCatId] = useState('')
+
+  // ── Data fetching ──
+
+  const fetchCategories = useCallback(async () => {
+    const { data: cats } = await supabase
+      .from('hardware_categories')
+      .select('id, key, label, sort_order')
+      .order('sort_order')
+
+    if (!cats) return []
+
+    const { data: models } = await supabase
+      .from('hardware_models')
+      .select('id, category_id, name')
+
+    const mapped: CategoryDef[] = cats.map((c) => ({
+      id: c.id,
+      key: c.key,
+      label: c.label,
+      models: (models || []).filter((m) => m.category_id === c.id).map((m) => ({ id: m.id, name: m.name })),
+    }))
+
+    setCategories(mapped)
+    setExpandedGroups((prev) => {
+      if (prev.size === 0) return new Set(mapped.map((c) => c.key))
+      return prev
+    })
+    return mapped
+  }, [])
+
+  const fetchAssets = useCallback(async () => {
+    const { data } = await supabase
+      .from('hardware_assets')
+      .select('id, name, category_key, model, vendor, ip_address, location, description, is_active')
+
+    if (data) {
+      setAssets(data.map((a) => ({ ...a, category: a.category_key })))
+    }
+  }, [])
+
+  const fetchVendors = useCallback(async () => {
+    const { data } = await supabase.from('vendors').select('name').order('name')
+    if (data) setVendorOptions(data.map((v) => v.name))
+  }, [])
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true)
+      await Promise.all([fetchCategories(), fetchAssets(), fetchVendors()])
+      setLoading(false)
+    }
+    init()
+  }, [fetchCategories, fetchAssets, fetchVendors])
+
+  // Helper: get models for a category key
+  function getModelsForCategory(catKey: string): string[] {
+    const cat = categories.find((c) => c.key === catKey)
+    return cat ? cat.models.map((m) => m.name) : []
+  }
+
+  // Helper: get category label
+  function getCategoryLabel(catKey: string): string {
+    const cat = categories.find((c) => c.key === catKey)
+    return cat?.label || catKey
+  }
 
   const filtered = assets.filter((a) => {
     if (filterCategory !== 'all' && a.category !== filterCategory) return false
@@ -65,10 +139,8 @@ export default function ServersPage() {
     return true
   })
 
-  const grouped = {
-    x86_server: filtered.filter((a) => a.category === 'x86_server'),
-    storage: filtered.filter((a) => a.category === 'storage'),
-  }
+  const grouped: Record<string, HardwareAsset[]> = {}
+  categories.forEach((cat) => { grouped[cat.key] = filtered.filter((a) => a.category === cat.key) })
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
@@ -81,7 +153,8 @@ export default function ServersPage() {
 
   function openNew() {
     setEditingAsset(null)
-    setFormName(''); setFormCategory('x86_server'); setFormModel(CATEGORY_MODELS.x86_server[0]); setFormVendor('HPE'); setFormIp(''); setFormLocation(''); setFormDesc('')
+    const firstCat = categories[0]
+    setFormName(''); setFormCategory(firstCat?.key || ''); setFormModel(firstCat?.models[0]?.name || ''); setFormVendor(vendorOptions[0] || ''); setFormIp(''); setFormLocation(''); setFormDesc('')
     setShowModal(true)
   }
 
@@ -91,43 +164,148 @@ export default function ServersPage() {
     setShowModal(true)
   }
 
-  function saveAsset() {
+  async function saveAsset() {
     if (!formName) return
-    const newAsset: HardwareAsset = {
-      id: editingAsset?.id || crypto.randomUUID(),
-      name: formName, category: formCategory, model: formModel, vendor: formVendor,
+    setSaving(true)
+    const payload = {
+      name: formName, category_key: formCategory, model: formModel, vendor: formVendor,
       ip_address: formIp, location: formLocation, description: formDesc, is_active: true,
     }
     if (editingAsset) {
-      setAssets(assets.map((a) => (a.id === editingAsset.id ? newAsset : a)))
+      await supabase.from('hardware_assets').update(payload).eq('id', editingAsset.id)
     } else {
-      setAssets([...assets, newAsset])
+      await supabase.from('hardware_assets').insert(payload)
     }
+    await fetchAssets()
+    setSaving(false)
     setShowModal(false)
   }
 
-  function deleteAsset(id: string) { setAssets(assets.filter((a) => a.id !== id)) }
+  async function deleteAsset(id: string) {
+    await supabase.from('hardware_assets').delete().eq('id', id)
+    await fetchAssets()
+  }
 
-  function handleImport() {
+  async function handleImport() {
     const lines = importText.trim().split('\n').filter((l) => l.trim())
-    const newAssets: HardwareAsset[] = lines.map((line) => {
+    const newAssets = lines.map((line) => {
       const parts = line.split(',').map((s) => s.trim())
-      const cat: HardwareCategory = parts[1] === 'storage' ? 'storage' : 'x86_server'
       return {
-        id: crypto.randomUUID(), name: parts[0] || '', category: cat,
+        name: parts[0] || '', category_key: parts[1] || categories[0]?.key || '',
         model: parts[2] || '', vendor: parts[3] || '', ip_address: parts[4] || '',
         location: parts[5] || '', description: parts[6] || '', is_active: true,
       }
     }).filter((a) => a.name)
-    setAssets([...assets, ...newAssets])
+    if (newAssets.length > 0) {
+      setSaving(true)
+      await supabase.from('hardware_assets').insert(newAssets)
+      await fetchAssets()
+      setSaving(false)
+    }
     setShowImportModal(false); setImportText('')
   }
 
-  const x86Count = assets.filter((a) => a.category === 'x86_server').length
-  const storageCount = assets.filter((a) => a.category === 'storage').length
+  // ── Category CRUD ──
+  function openAddCategory() {
+    setEditingCat(null)
+    setCatFormLabel('')
+    setCatFormKey('')
+    setShowCatModal(true)
+  }
 
-  const CategoryIcon = ({ cat }: { cat: HardwareCategory }) => {
-    return cat === 'x86_server' ? <Server className="w-4 h-4" /> : <Database className="w-4 h-4" />
+  function openEditCategory(cat: CategoryDef) {
+    setEditingCat(cat)
+    setCatFormLabel(cat.label)
+    setCatFormKey(cat.key)
+    setShowCatModal(true)
+  }
+
+  async function saveCategory() {
+    if (!catFormLabel.trim() || !catFormKey.trim()) return
+    setSaving(true)
+    if (editingCat) {
+      await supabase.from('hardware_categories').update({ key: catFormKey.trim(), label: catFormLabel.trim() }).eq('id', editingCat.id)
+      // Update assets that had old category key
+      if (editingCat.key !== catFormKey.trim()) {
+        await supabase.from('hardware_assets').update({ category_key: catFormKey.trim() }).eq('category_key', editingCat.key)
+      }
+    } else {
+      const maxSort = categories.length > 0 ? Math.max(...categories.map((c, i) => i)) + 1 : 0
+      await supabase.from('hardware_categories').insert({ key: catFormKey.trim(), label: catFormLabel.trim(), sort_order: maxSort })
+    }
+    await fetchCategories()
+    await fetchAssets()
+    setSaving(false)
+    setShowCatModal(false)
+  }
+
+  async function deleteCategory(catId: string) {
+    const cat = categories.find((c) => c.id === catId)
+    if (!cat) return
+    const assetCount = assets.filter((a) => a.category === cat.key).length
+    if (assetCount > 0) {
+      if (!confirm(`此類別下有 ${assetCount} 筆硬體資料，刪除類別後資料仍保留但分類將失效。確定刪除？`)) return
+    }
+    // Delete models under this category first
+    await supabase.from('hardware_models').delete().eq('category_id', catId)
+    await supabase.from('hardware_categories').delete().eq('id', catId)
+    await fetchCategories()
+  }
+
+  // ── Model CRUD ──
+  function openAddModel(catId: string) {
+    setEditingModel(null)
+    setModelTargetCatId(catId)
+    setModelFormName('')
+    setShowModelModal(true)
+  }
+
+  function openEditModel(catId: string, model: ModelDef) {
+    setEditingModel({ catId, model })
+    setModelTargetCatId(catId)
+    setModelFormName(model.name)
+    setShowModelModal(true)
+  }
+
+  async function saveModel() {
+    if (!modelFormName.trim()) return
+    setSaving(true)
+    if (editingModel) {
+      await supabase.from('hardware_models').update({ name: modelFormName.trim() }).eq('id', editingModel.model.id)
+      // Update assets that used old model name
+      if (editingModel.model.name !== modelFormName.trim()) {
+        const cat = categories.find((c) => c.id === modelTargetCatId)
+        if (cat) {
+          await supabase.from('hardware_assets').update({ model: modelFormName.trim() }).eq('category_key', cat.key).eq('model', editingModel.model.name)
+        }
+      }
+    } else {
+      await supabase.from('hardware_models').insert({ category_id: modelTargetCatId, name: modelFormName.trim() })
+    }
+    await fetchCategories()
+    await fetchAssets()
+    setSaving(false)
+    setShowModelModal(false)
+  }
+
+  async function deleteModel(catId: string, modelId: string) {
+    await supabase.from('hardware_models').delete().eq('id', modelId)
+    await fetchCategories()
+  }
+
+  const CategoryIcon = ({ catKey }: { catKey: string }) => {
+    return catKey === 'x86_server' ? <Server className="w-4 h-4" /> : catKey === 'storage' ? <Database className="w-4 h-4" /> : <HardDrive className="w-4 h-4" />
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" />
+          <span className="ml-2 text-[var(--color-text-muted)]">載入中…</span>
+        </div>
+      </AppShell>
+    )
   }
 
   return (
@@ -135,116 +313,212 @@ export default function ServersPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">硬體管理</h1>
         <div className="flex gap-2">
-          <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
-            <Upload className="w-4 h-4" /> 匯入
-          </button>
-          <button onClick={openNew} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
-            <Plus className="w-4 h-4" /> 新增硬體
-          </button>
+          {pageTab === 'assets' && (
+            <>
+              <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
+                <Upload className="w-4 h-4" /> 匯入
+              </button>
+              <button onClick={openNew} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
+                <Plus className="w-4 h-4" /> 新增硬體
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
-          <div className="text-2xl font-bold">{assets.length}</div>
-          <div className="text-sm text-[var(--color-text-muted)]">總硬體數</div>
-        </div>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
-          <div className="text-2xl font-bold text-[var(--color-primary)]">{x86Count}</div>
-          <div className="text-sm text-[var(--color-text-muted)]">x86伺服器</div>
-        </div>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
-          <div className="text-2xl font-bold text-purple-600">{storageCount}</div>
-          <div className="text-sm text-[var(--color-text-muted)]">儲存裝置</div>
-        </div>
+      {/* Page tabs */}
+      <div className="flex gap-1 mb-6 border-b border-[var(--color-border)]">
+        <button onClick={() => setPageTab('assets')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${pageTab === 'assets' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>
+          <HardDrive className="w-4 h-4 inline mr-1.5" />硬體清單
+        </button>
+        <button onClick={() => setPageTab('categories')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${pageTab === 'categories' ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>
+          <Settings className="w-4 h-4 inline mr-1.5" />類別與型號管理
+        </button>
       </div>
 
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-          {[{ k: 'all', l: '全部' }, { k: 'x86_server', l: 'x86伺服器' }, { k: 'storage', l: '儲存裝置' }].map(({ k, l }) => (
-            <button key={k} onClick={() => setFilterCategory(k as 'all' | HardwareCategory)}
-              className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>
-              {l}
+      {/* ════════════ Assets Tab ════════════ */}
+      {pageTab === 'assets' && (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
+              <div className="text-2xl font-bold">{assets.length}</div>
+              <div className="text-sm text-[var(--color-text-muted)]">總硬體數</div>
+            </div>
+            {categories.slice(0, 2).map((cat) => (
+              <div key={cat.id} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
+                <div className="text-2xl font-bold text-[var(--color-primary)]">{assets.filter((a) => a.category === cat.key).length}</div>
+                <div className="text-sm text-[var(--color-text-muted)]">{cat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
+              {[{ k: 'all', l: '全部' }, ...categories.map((c) => ({ k: c.key, l: c.label }))].map(({ k, l }) => (
+                <button key={k} onClick={() => setFilterCategory(k)}
+                  className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 max-w-xs">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋名稱或 IP..." className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--color-border)] rounded-lg" />
+            </div>
+          </div>
+
+          <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
+                  <th className="text-left px-4 py-3 font-medium">名稱</th>
+                  <th className="text-left px-4 py-3 font-medium">型號</th>
+                  <th className="text-left px-4 py-3 font-medium">廠商</th>
+                  <th className="text-left px-4 py-3 font-medium">IP 位址</th>
+                  <th className="text-left px-4 py-3 font-medium">位置</th>
+                  <th className="text-left px-4 py-3 font-medium">說明</th>
+                  <th className="text-right px-4 py-3 font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(grouped).map(([catKey, items]) => {
+                  if (filterCategory !== 'all' && filterCategory !== catKey) return null
+                  if (items.length === 0) return null
+                  const catIdx = categories.findIndex((c) => c.key === catKey)
+                  return (
+                    <React.Fragment key={catKey}>
+                      <tr>
+                        <td colSpan={7} className="p-0">
+                          <button onClick={() => toggleGroup(catKey)}
+                            className={`flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium transition-colors ${catIdx % 2 === 0 ? 'bg-[var(--color-primary-dim)] hover:bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]' : 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-300'}`}>
+                            {expandedGroups.has(catKey) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            <CategoryIcon catKey={catKey} />
+                            {getCategoryLabel(catKey)}
+                            <span className="text-xs opacity-60 ml-1">({items.length})</span>
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedGroups.has(catKey) && items.map((asset) => (
+                        <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
+                          <td className="px-4 py-3 pl-10 font-medium">
+                            <CategoryIcon catKey={asset.category} />{' '}{asset.name}
+                          </td>
+                          <td className="px-4 py-3 text-sm">{asset.model}</td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{asset.vendor}</span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs">{asset.ip_address}</td>
+                          <td className="px-4 py-3">{asset.location}</td>
+                          <td className="px-4 py-3 text-[var(--color-text-muted)]">{asset.description}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button onClick={() => openEdit(asset)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
+                            <button onClick={() => deleteAsset(asset.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+            {filtered.length === 0 && <div className="text-center py-8 text-[var(--color-text-muted)]">無符合條件的硬體</div>}
+          </div>
+        </>
+      )}
+
+      {/* ════════════ Categories Tab ════════════ */}
+      {pageTab === 'categories' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-[var(--color-text-muted)]">管理硬體類別及其下的型號選項，修改後會即時反映在硬體清單中。</p>
+            <button onClick={openAddCategory} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
+              <Plus className="w-4 h-4" /> 新增類別
             </button>
+          </div>
+
+          {categories.length === 0 && (
+            <div className="text-center py-12 text-[var(--color-text-muted)]">
+              <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p>尚未建立任何類別</p>
+            </div>
+          )}
+
+          {categories.map((cat) => (
+            <div key={cat.id} className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
+              {/* Category header */}
+              <div className="flex items-center justify-between px-4 py-3 bg-[var(--color-table-header)]">
+                <div className="flex items-center gap-3">
+                  <CategoryIcon catKey={cat.key} />
+                  <div>
+                    <span className="font-semibold">{cat.label}</span>
+                    <span className="text-xs text-[var(--color-text-muted)] ml-2 font-mono">({cat.key})</span>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)]">
+                    {assets.filter((a) => a.category === cat.key).length} 筆硬體
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => openEditCategory(cat)} className="p-1.5 hover:bg-[var(--color-primary-dim)] rounded text-[var(--color-primary)]" title="編輯類別">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => deleteCategory(cat.id)} className="p-1.5 hover:bg-[var(--color-danger-dim)] rounded text-[var(--color-danger)]" title="刪除類別">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Models list */}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-[var(--color-text-muted)]">型號列表</span>
+                  <button onClick={() => openAddModel(cat.id)} className="text-xs px-2 py-1 bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)] rounded hover:opacity-80 flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> 新增型號
+                  </button>
+                </div>
+                {cat.models.length === 0 ? (
+                  <div className="text-xs text-[var(--color-text-muted)] py-3 text-center border border-dashed border-[var(--color-border)] rounded-lg">
+                    尚無型號，點擊上方按鈕新增
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {cat.models.map((model) => (
+                      <div key={model.id} className="flex items-center justify-between px-3 py-2 bg-[var(--color-hover)] rounded-lg group">
+                        <span className="text-sm">{model.name}</span>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openEditModel(cat.id, model)} className="p-1 hover:bg-[var(--color-primary-dim)] rounded text-[var(--color-primary)]">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => deleteModel(cat.id, model.id)} className="p-1 hover:bg-[var(--color-danger-dim)] rounded text-[var(--color-danger)]">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           ))}
         </div>
-        <div className="relative flex-1 max-w-xs">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋名稱或 IP..." className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--color-border)] rounded-lg" />
-        </div>
-      </div>
+      )}
 
-      <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
-              <th className="text-left px-4 py-3 font-medium">名稱</th>
-              <th className="text-left px-4 py-3 font-medium">型號</th>
-              <th className="text-left px-4 py-3 font-medium">廠商</th>
-              <th className="text-left px-4 py-3 font-medium">IP 位址</th>
-              <th className="text-left px-4 py-3 font-medium">位置</th>
-              <th className="text-left px-4 py-3 font-medium">說明</th>
-              <th className="text-right px-4 py-3 font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(grouped).map(([catKey, items]) => {
-              if (filterCategory !== 'all' && filterCategory !== catKey) return null
-              if (items.length === 0) return null
-              const cat = catKey as HardwareCategory
-              return (
-                <React.Fragment key={catKey}>
-                  <tr>
-                    <td colSpan={7} className="p-0">
-                      <button onClick={() => toggleGroup(catKey)}
-                        className={`flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium transition-colors ${cat === 'x86_server' ? 'bg-[var(--color-primary-dim)] hover:bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]' : 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-300'}`}>
-                        {expandedGroups.has(catKey) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        <CategoryIcon cat={cat} />
-                        {CATEGORY_LABELS[cat]}
-                        <span className="text-xs opacity-60 ml-1">({items.length})</span>
-                      </button>
-                    </td>
-                  </tr>
-                  {expandedGroups.has(catKey) && items.map((asset) => (
-                    <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
-                      <td className="px-4 py-3 pl-10 font-medium">
-                        <CategoryIcon cat={asset.category} />{' '}{asset.name}
-                      </td>
-                      <td className="px-4 py-3 text-sm">{asset.model}</td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{asset.vendor}</span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">{asset.ip_address}</td>
-                      <td className="px-4 py-3">{asset.location}</td>
-                      <td className="px-4 py-3 text-[var(--color-text-muted)]">{asset.description}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button onClick={() => openEdit(asset)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => deleteAsset(asset.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              )
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && <div className="text-center py-8 text-[var(--color-text-muted)]">無符合條件的硬體</div>}
-      </div>
-
+      {/* ── 新增/編輯硬體 Modal ── */}
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editingAsset ? '編輯硬體' : '新增硬體'}>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">類別 *</label>
-            <select value={formCategory} onChange={(e) => { const c = e.target.value as HardwareCategory; setFormCategory(c); setFormModel(CATEGORY_MODELS[c][0]) }}
+            <select value={formCategory} onChange={(e) => { const c = e.target.value; setFormCategory(c); const models = getModelsForCategory(c); setFormModel(models[0] || '') }}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {categories.map((c) => <option key={c.id} value={c.key}>{c.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">型號 *</label>
             <select value={formModel} onChange={(e) => setFormModel(e.target.value)}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {CATEGORY_MODELS[formCategory].map((m) => <option key={m} value={m}>{m}</option>)}
+              {getModelsForCategory(formCategory).map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
           <div>
@@ -252,7 +526,7 @@ export default function ServersPage() {
             <select value={formVendor} onChange={(e) => setFormVendor(e.target.value)}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
               <option value="">請選擇</option>
-              {VENDOR_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
+              {vendorOptions.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
           <div>
@@ -275,22 +549,69 @@ export default function ServersPage() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveAsset} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={saveAsset} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}儲存
+            </button>
           </div>
         </div>
       </Modal>
 
+      {/* ── 匯入 Modal ── */}
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title="匯入硬體清單">
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-muted)]">
-            每行一筆：<code className="text-xs bg-[var(--color-bg-elevated)] px-1 rounded">名稱,類別(x86_server/storage),型號,廠商,IP,位置,說明</code>
+            每行一筆：<code className="text-xs bg-[var(--color-bg-elevated)] px-1 rounded">名稱,類別key,型號,廠商,IP,位置,說明</code>
           </p>
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={6}
             placeholder={`Web Server 03,x86_server,HPE 380,HPE,192.168.1.12,機房A,備援伺服器`}
             className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono text-xs" />
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={handleImport} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">匯入</button>
+            <button onClick={handleImport} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}匯入
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── 新增/編輯類別 Modal ── */}
+      <Modal open={showCatModal} onClose={() => setShowCatModal(false)} title={editingCat ? '編輯類別' : '新增類別'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">類別名稱 *</label>
+            <input value={catFormLabel} onChange={(e) => setCatFormLabel(e.target.value)}
+              className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" placeholder="例：x86伺服器" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">類別代碼 *</label>
+            <input value={catFormKey} onChange={(e) => setCatFormKey(e.target.value)}
+              className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono" placeholder="例：x86_server" />
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">系統內部識別用，建議使用英文及底線</p>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <button onClick={() => setShowCatModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
+            <button onClick={saveCategory} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {editingCat ? '更新' : '新增'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── 新增/編輯型號 Modal ── */}
+      <Modal open={showModelModal} onClose={() => setShowModelModal(false)} title={editingModel ? '編輯型號' : '新增型號'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">型號名稱 *</label>
+            <input value={modelFormName} onChange={(e) => setModelFormName(e.target.value)}
+              className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" placeholder="例：HPE 380" />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <button onClick={() => setShowModelModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
+            <button onClick={saveModel} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {editingModel ? '更新' : '新增'}
+            </button>
           </div>
         </div>
       </Modal>

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 import AppShell from '@/components/AppShell'
 import CalendarGrid from '@/components/CalendarGrid'
 import Modal from '@/components/Modal'
-import { Plus, Clock, User, FileText, Trash2 } from 'lucide-react'
+import { Plus, Clock, User, FileText, Trash2, Loader2 } from 'lucide-react'
 import { format, formatMonthTitle, isSameDay } from '@/lib/calendar-utils'
 import type { WorkEvent, LeaveRecord } from '@/types/database'
 
@@ -47,21 +48,12 @@ const EVENT_COLORS = [
   { value: '#EC4899', label: '粉色' },
 ]
 
-// Demo data
-const DEMO_USERS = ['王小明', '陳美麗', '林志偉', '張雅琪', '李大同']
-
-const DEMO_EVENTS: LocalWorkEvent[] = [
-  { id: '1', title: '伺服器維護', description: '定期維護', event_date: format(new Date(), 'yyyy-MM-dd'), start_time: '09:00', end_time: '12:00', is_all_day: false, color: '#3B82F6', assignees: ['王小明', '林志偉'] },
-  { id: '2', title: '網路設備巡檢', description: '', event_date: format(new Date(), 'yyyy-MM-dd'), start_time: '14:00', end_time: '17:00', is_all_day: false, color: '#10B981', assignees: ['陳美麗'] },
-]
-
-const DEMO_LEAVES: LocalLeave[] = [
-  { id: 'l1', user_name: '張雅琪', leave_type: 'annual', leave_date: format(new Date(), 'yyyy-MM-dd'), is_half_day: false, half_day_period: '', note: '出國旅遊' },
-]
-
 export default function CalendarPage() {
-  const [events, setEvents] = useState<LocalWorkEvent[]>(DEMO_EVENTS)
-  const [leaves, setLeaves] = useState<LocalLeave[]>(DEMO_LEAVES)
+  const [events, setEvents] = useState<LocalWorkEvent[]>([])
+  const [leaves, setLeaves] = useState<LocalLeave[]>([])
+  const [users, setUsers] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(new Date())
   const [showEventModal, setShowEventModal] = useState(false)
@@ -85,6 +77,47 @@ export default function CalendarPage() {
   const [leaveHalf, setLeaveHalf] = useState(false)
   const [leavePeriod, setLeavePeriod] = useState('morning')
   const [leaveNote, setLeaveNote] = useState('')
+
+  // Fetch functions
+  const fetchEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('work_events')
+      .select('*')
+      .order('event_date')
+    if (!error && data) {
+      setEvents(data.map((row: Record<string, unknown>) => ({
+        ...row,
+        assignees: typeof row.assignees === 'string' && row.assignees
+          ? (row.assignees as string).split(',').map((s: string) => s.trim())
+          : Array.isArray(row.assignees) ? row.assignees : [],
+      })) as LocalWorkEvent[])
+    }
+  }, [])
+
+  const fetchLeaves = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('leave_records')
+      .select('*')
+      .order('leave_date')
+    if (!error && data) setLeaves(data as LocalLeave[])
+  }, [])
+
+  const fetchUsers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('name')
+      .eq('is_active', true)
+      .order('name')
+    if (!error && data) setUsers(data.map((u: { name: string }) => u.name))
+  }, [])
+
+  useEffect(() => {
+    async function init() {
+      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers()])
+      setLoading(false)
+    }
+    init()
+  }, [fetchEvents, fetchLeaves, fetchUsers])
 
   const calendarEvents = [
     ...events.map((e) => ({
@@ -131,10 +164,10 @@ export default function CalendarPage() {
     setShowEventModal(true)
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (!formTitle || !formDate) return
-    const newEvent: LocalWorkEvent = {
-      id: editingEvent?.id || crypto.randomUUID(),
+    setSaving(true)
+    const payload = {
       title: formTitle,
       description: formDesc,
       event_date: formDate,
@@ -142,18 +175,23 @@ export default function CalendarPage() {
       end_time: formEndTime,
       is_all_day: formAllDay,
       color: formColor,
-      assignees: formAssignees,
+      assignees: formAssignees.join(','),
     }
     if (editingEvent) {
-      setEvents(events.map((e) => (e.id === editingEvent.id ? newEvent : e)))
+      await supabase.from('work_events').update(payload).eq('id', editingEvent.id)
     } else {
-      setEvents([...events, newEvent])
+      await supabase.from('work_events').insert(payload)
     }
+    await fetchEvents()
+    setSaving(false)
     setShowEventModal(false)
   }
 
-  function deleteEvent(id: string) {
-    setEvents(events.filter((e) => e.id !== id))
+  async function deleteEvent(id: string) {
+    setSaving(true)
+    await supabase.from('work_events').delete().eq('id', id)
+    await fetchEvents()
+    setSaving(false)
     setShowEventModal(false)
   }
 
@@ -167,10 +205,10 @@ export default function CalendarPage() {
     setShowLeaveModal(true)
   }
 
-  function saveLeave() {
+  async function saveLeave() {
     if (!leaveUser || !leaveDate) return
-    const newLeave: LocalLeave = {
-      id: crypto.randomUUID(),
+    setSaving(true)
+    const payload = {
       user_name: leaveUser,
       leave_type: leaveType,
       leave_date: leaveDate,
@@ -178,7 +216,9 @@ export default function CalendarPage() {
       half_day_period: leavePeriod,
       note: leaveNote,
     }
-    setLeaves([...leaves, newLeave])
+    await supabase.from('leave_records').insert(payload)
+    await fetchLeaves()
+    setSaving(false)
     setShowLeaveModal(false)
   }
 
@@ -195,6 +235,17 @@ export default function CalendarPage() {
   const selectedDayLeaves = selectedDate
     ? leaves.filter((l) => l.leave_date === format(selectedDate, 'yyyy-MM-dd'))
     : []
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" />
+          <span className="ml-2 text-[var(--color-text-muted)]">載入中...</span>
+        </div>
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell>
@@ -393,7 +444,7 @@ export default function CalendarPage() {
           <div>
             <label className="block text-sm font-medium mb-1">指派人員</label>
             <div className="flex flex-wrap gap-2">
-              {DEMO_USERS.map((name) => (
+              {users.map((name) => (
                 <button
                   key={name}
                   onClick={() => toggleAssignee(name)}
@@ -410,13 +461,15 @@ export default function CalendarPage() {
           </div>
           <div className="flex gap-2 pt-2">
             {editingEvent && (
-              <button onClick={() => deleteEvent(editingEvent.id)} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1">
-                <Trash2 className="w-4 h-4" /> 刪除
+              <button onClick={() => deleteEvent(editingEvent.id)} disabled={saving} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} 刪除
               </button>
             )}
             <div className="flex-1" />
             <button onClick={() => setShowEventModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveEvent} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={saveEvent} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} 儲存
+            </button>
           </div>
         </div>
       </Modal>
@@ -428,7 +481,7 @@ export default function CalendarPage() {
             <label className="block text-sm font-medium mb-1">人員 *</label>
             <select value={leaveUser} onChange={(e) => setLeaveUser(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
               <option value="">請選擇</option>
-              {DEMO_USERS.map((n) => <option key={n} value={n}>{n}</option>)}
+              {users.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div>
@@ -459,7 +512,9 @@ export default function CalendarPage() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowLeaveModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveLeave} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={saveLeave} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} 儲存
+            </button>
           </div>
         </div>
       </Modal>

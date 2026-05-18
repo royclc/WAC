@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import Modal from './Modal'
 import YearMonthPicker from './YearMonthPicker'
+import { supabase } from '@/lib/supabase'
 import {
   getCalendarDays,
   formatMonthTitle,
@@ -19,9 +20,11 @@ import type { AssetType } from '@/types/database'
 
 interface DowntimeEvent {
   id: string
+  asset_type: string
   asset_id: string
   asset_name: string
   event_type: 'downtime' | 'maintenance' | 'other'
+  plan_type: string | null
   title: string
   description: string
   start_time: string
@@ -53,57 +56,15 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   other: '#6B7280',
 }
 
-// Demo assets — hardware (server page shows all, but availability only counts x86)
-const DEMO_SERVER_ASSETS: AssetOption[] = [
-  { id: 'h1', name: 'Web Server 01', ip_address: '192.168.1.10', group: 'x86伺服器', category: 'x86_server' },
-  { id: 'h2', name: 'DB Server 01', ip_address: '192.168.1.20', group: 'x86伺服器', category: 'x86_server' },
-  { id: 'h3', name: 'AP Server 01', ip_address: '192.168.1.30', group: 'x86伺服器', category: 'x86_server' },
-  { id: 'h4', name: 'AP Server 02', ip_address: '192.168.1.31', group: 'x86伺服器', category: 'x86_server' },
-  { id: 'h5', name: 'NetApp FAS01', ip_address: '192.168.1.50', group: '儲存裝置', category: 'storage' },
-  { id: 'h6', name: '備份磁帶機 01', ip_address: '192.168.1.60', group: '儲存裝置', category: 'storage' },
-]
-
-const DEMO_NETWORK_ASSETS: AssetOption[] = [
-  // 總局 - 內網
-  { id: 'hi1', name: '總局內網防火牆', ip_address: '', group: '總局-內網' },
-  { id: 'hi2', name: '總局內網核心交換器', ip_address: '', group: '總局-內網' },
-  { id: 'hi3', name: '總局內網主機交換器', ip_address: '', group: '總局-內網' },
-  { id: 'hi4', name: '總局內網邊界交換器', ip_address: '', group: '總局-內網' },
-  { id: 'hi5', name: '總局內網聚合交換器', ip_address: '', group: '總局-內網' },
-  // 總局 - 外網
-  { id: 'he1', name: '總局外網防火牆', ip_address: '', group: '總局-外網' },
-  { id: 'he2', name: '總局外網核心交換器', ip_address: '', group: '總局-外網' },
-  { id: 'he3', name: '總局外網主機交換器', ip_address: '', group: '總局-外網' },
-  { id: 'he4', name: '總局外網邊界交換器', ip_address: '', group: '總局-外網' },
-  { id: 'he5', name: '總局外網聚合交換器', ip_address: '', group: '總局-外網' },
-  // a稽徵所
-  { id: 'ai1', name: 'a稽徵所內網防火牆', ip_address: '', group: 'a稽徵所-內網' },
-  { id: 'ai2', name: 'a稽徵所內網前端交換器', ip_address: '', group: 'a稽徵所-內網' },
-  { id: 'ai3', name: 'a稽徵所內網聚合交換器', ip_address: '', group: 'a稽徵所-內網' },
-  { id: 'ae1', name: 'a稽徵所外網防火牆', ip_address: '', group: 'a稽徵所-外網' },
-  { id: 'ae2', name: 'a稽徵所外網前端交換器', ip_address: '', group: 'a稽徵所-外網' },
-  { id: 'ae3', name: 'a稽徵所外網聚合交換器', ip_address: '', group: 'a稽徵所-外網' },
-  // b分局
-  { id: 'bi1', name: 'b分局內網防火牆', ip_address: '', group: 'b分局-內網' },
-  { id: 'bi2', name: 'b分局內網前端交換器', ip_address: '', group: 'b分局-內網' },
-  { id: 'bi3', name: 'b分局內網聚合交換器', ip_address: '', group: 'b分局-內網' },
-  { id: 'be1', name: 'b分局外網防火牆', ip_address: '', group: 'b分局-外網' },
-  { id: 'be2', name: 'b分局外網前端交換器', ip_address: '', group: 'b分局-外網' },
-  { id: 'be3', name: 'b分局外網聚合交換器', ip_address: '', group: 'b分局-外網' },
-  // c稽徵所
-  { id: 'ci1', name: 'c稽徵所內網防火牆', ip_address: '', group: 'c稽徵所-內網' },
-  { id: 'ci2', name: 'c稽徵所內網前端交換器', ip_address: '', group: 'c稽徵所-內網' },
-  { id: 'ci3', name: 'c稽徵所內網聚合交換器', ip_address: '', group: 'c稽徵所-內網' },
-  { id: 'ce1', name: 'c稽徵所外網防火牆', ip_address: '', group: 'c稽徵所-外網' },
-  { id: 'ce2', name: 'c稽徵所外網前端交換器', ip_address: '', group: 'c稽徵所-外網' },
-  { id: 'ce3', name: 'c稽徵所外網聚合交換器', ip_address: '', group: 'c稽徵所-外網' },
-]
-
 export default function AvailabilityCalendar({ assetType, typeName }: AvailabilityCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [events, setEvents] = useState<DowntimeEvent[]>([])
   const [showModal, setShowModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [allAssets, setAllAssets] = useState<AssetOption[]>([])
 
   // Form state
   const [formAsset, setFormAsset] = useState('')
@@ -113,7 +74,76 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
   const [formStart, setFormStart] = useState('')
   const [formEnd, setFormEnd] = useState('')
 
-  const allAssets = assetType === 'server' ? DEMO_SERVER_ASSETS : DEMO_NETWORK_ASSETS
+  // ── Fetch assets ──
+  const fetchAssets = useCallback(async () => {
+    if (assetType === 'server') {
+      // Fetch hardware_assets + hardware_categories for group label
+      const [{ data: assets }, { data: cats }] = await Promise.all([
+        supabase
+          .from('hardware_assets')
+          .select('id, name, category_key, ip_address, is_active')
+          .eq('is_active', true),
+        supabase
+          .from('hardware_categories')
+          .select('key, label')
+          .order('sort_order'),
+      ])
+
+      const catMap = new Map((cats || []).map((c) => [c.key, c.label]))
+
+      setAllAssets(
+        (assets || []).map((a) => ({
+          id: a.id,
+          name: a.name,
+          ip_address: a.ip_address || '',
+          group: catMap.get(a.category_key) || a.category_key,
+          category: a.category_key,
+        }))
+      )
+    } else {
+      // Network: fetch org_devices joined with organizations
+      const [{ data: devices }, { data: orgs }] = await Promise.all([
+        supabase.from('org_devices').select('id, org_id, name, zone, device_type, vendor, quantity'),
+        supabase.from('organizations').select('id, name'),
+      ])
+
+      const orgMap = new Map((orgs || []).map((o) => [o.id, o.name]))
+
+      setAllAssets(
+        (devices || []).map((d) => ({
+          id: d.id,
+          name: d.name,
+          ip_address: '',
+          group: `${orgMap.get(d.org_id) || '未知'}-${d.zone === 'internal' ? '內網' : '外網'}`,
+        }))
+      )
+    }
+  }, [assetType])
+
+  // ── Fetch events ──
+  const fetchEvents = useCallback(async () => {
+    const { data } = await supabase
+      .from('downtime_events')
+      .select('id, asset_type, asset_id, asset_name, event_type, plan_type, title, description, start_time, end_time')
+      .eq('asset_type', assetType)
+
+    if (data) {
+      setEvents(data as DowntimeEvent[])
+    }
+  }, [assetType])
+
+  // ── Init ──
+  useEffect(() => {
+    let cancelled = false
+    async function init() {
+      setLoading(true)
+      await Promise.all([fetchAssets(), fetchEvents()])
+      if (!cancelled) setLoading(false)
+    }
+    init()
+    return () => { cancelled = true }
+  }, [fetchAssets, fetchEvents])
+
   // 硬體可用率只計算 x86 伺服器
   const assets = assetType === 'server' ? allAssets.filter((a) => a.category === 'x86_server') : allAssets
   const days = getCalendarDays(currentMonth)
@@ -172,11 +202,13 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     setShowModal(true)
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (!formAsset || !formTitle || !formStart || !formEnd) return
-    const asset = assets.find((a) => a.id === formAsset)
-    const newEvent: DowntimeEvent = {
-      id: crypto.randomUUID(),
+    const asset = allAssets.find((a) => a.id === formAsset)
+    setSaving(true)
+
+    const { error } = await supabase.from('downtime_events').insert({
+      asset_type: assetType,
       asset_id: formAsset,
       asset_name: asset?.name || '',
       event_type: formType,
@@ -184,16 +216,32 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
       description: formDesc,
       start_time: formStart,
       end_time: formEnd,
+    })
+
+    setSaving(false)
+    if (!error) {
+      await fetchEvents()
+      setShowModal(false)
     }
-    setEvents([...events, newEvent])
-    setShowModal(false)
   }
 
-  function deleteEvent(id: string) {
-    setEvents(events.filter((e) => e.id !== id))
+  async function deleteEvent(id: string) {
+    const { error } = await supabase.from('downtime_events').delete().eq('id', id)
+    if (!error) {
+      await fetchEvents()
+    }
   }
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-[var(--color-text-muted)]">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        載入中...
+      </div>
+    )
+  }
 
   return (
     <div className="flex gap-6">
@@ -452,9 +500,9 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           <div>
             <label className="block text-sm font-medium mb-1">設備 *</label>
             <select value={formAsset} onChange={(e) => setFormAsset(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {assets.some((a) => a.group) ? (
+              {allAssets.some((a) => a.group) ? (
                 Object.entries(
-                  assets.reduce((acc, a) => {
+                  allAssets.reduce((acc, a) => {
                     const g = a.group || '其他'
                     if (!acc[g]) acc[g] = []
                     acc[g].push(a)
@@ -466,7 +514,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   </optgroup>
                 ))
               ) : (
-                assets.map((a) => <option key={a.id} value={a.id}>{a.name}{a.ip_address ? ` (${a.ip_address})` : ''}</option>)
+                allAssets.map((a) => <option key={a.id} value={a.id}>{a.name}{a.ip_address ? ` (${a.ip_address})` : ''}</option>)
               )}
             </select>
           </div>
@@ -496,7 +544,10 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveEvent} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={saveEvent} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              儲存
+            </button>
           </div>
         </div>
       </Modal>

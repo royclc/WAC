@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
+import { supabase } from '@/lib/supabase'
 import {
   Plus, Pencil, Trash2, Building2, ChevronDown, ChevronRight,
-  Shield, Lock, Globe, Cable, Wifi,
+  Shield, Lock, Globe, Cable, Wifi, Loader2,
 } from 'lucide-react'
 
 // ── Types ──
@@ -87,52 +88,12 @@ function generateDevices(unitName: string, unitType: UnitType, qtyMap?: DeviceQt
   return devices
 }
 
-// ── Demo Data ──
-
-const DEMO_UNITS: OrgUnit[] = [
-  {
-    id: 'u1', name: '總局', type: 'headquarters', created_at: '2026-01-01',
-    devices: generateDevices('總局', 'headquarters'),
-    circuits: [
-      { id: 'c1', circuit_number: 'xxxxd', bandwidth: '200', ip_address: '' },
-      { id: 'c2', circuit_number: 'Xxxdx', bandwidth: '200', ip_address: '' },
-      { id: 'c3', circuit_number: 'Xx3', bandwidth: '100', ip_address: '' },
-      { id: 'c4', circuit_number: 'Xxr', bandwidth: '100/40', ip_address: '' },
-    ],
-  },
-  {
-    id: 'u2', name: 'a稽徵所', type: 'office', created_at: '2026-01-01',
-    devices: generateDevices('a稽徵所', 'office'),
-    circuits: [
-      { id: 'c8', circuit_number: 'Xd', bandwidth: '80', ip_address: '' },
-      { id: 'c9', circuit_number: 'Xd', bandwidth: '90', ip_address: '' },
-      { id: 'c10', circuit_number: 'Xxbb', bandwidth: '80', ip_address: '' },
-    ],
-  },
-  {
-    id: 'u3', name: 'b分局', type: 'branch', created_at: '2026-01-01',
-    devices: generateDevices('b分局', 'branch'),
-    circuits: [
-      { id: 'c5', circuit_number: 'Xe3', bandwidth: '50', ip_address: '' },
-      { id: 'c6', circuit_number: 'Xee', bandwidth: '60', ip_address: '' },
-      { id: 'c7', circuit_number: 'Xxssa', bandwidth: '70', ip_address: '' },
-    ],
-  },
-  {
-    id: 'u4', name: 'c稽徵所', type: 'office', created_at: '2026-01-01',
-    devices: generateDevices('c稽徵所', 'office'),
-    circuits: [
-      { id: 'c11', circuit_number: 'asdfaf', bandwidth: '70', ip_address: '' },
-      { id: 'c12', circuit_number: 'asdfa', bandwidth: '50', ip_address: '' },
-      { id: 'c13', circuit_number: 'bb', bandwidth: '60', ip_address: '' },
-    ],
-  },
-]
-
 // ── Component ──
 
 export default function OrganizationsPage() {
-  const [units, setUnits] = useState<OrgUnit[]>(DEMO_UNITS)
+  const [units, setUnits] = useState<OrgUnit[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [expandedUnits, setExpandedUnits] = useState<Set<string>>(new Set())
@@ -149,6 +110,57 @@ export default function OrganizationsPage() {
   const [circuitFormNumber, setCircuitFormNumber] = useState('')
   const [circuitFormBandwidth, setCircuitFormBandwidth] = useState('')
   const [circuitFormIp, setCircuitFormIp] = useState('')
+
+  // ── Data fetching ──
+
+  const fetchOrganizations = useCallback(async () => {
+    const [orgsRes, devicesRes, circuitsRes] = await Promise.all([
+      supabase.from('organizations').select('*').order('name'),
+      supabase.from('org_devices').select('*'),
+      supabase.from('org_circuits').select('*'),
+    ])
+
+    if (orgsRes.error) { console.error('Failed to fetch organizations:', orgsRes.error); return }
+    if (devicesRes.error) { console.error('Failed to fetch devices:', devicesRes.error); return }
+    if (circuitsRes.error) { console.error('Failed to fetch circuits:', circuitsRes.error); return }
+
+    const orgs = orgsRes.data ?? []
+    const devices = devicesRes.data ?? []
+    const circuits = circuitsRes.data ?? []
+
+    const combined: OrgUnit[] = orgs.map((org) => ({
+      id: org.id,
+      name: org.name,
+      type: org.type as UnitType,
+      created_at: org.created_at?.slice(0, 10) ?? '',
+      devices: devices
+        .filter((d) => d.org_id === org.id)
+        .map((d) => ({
+          id: d.id,
+          name: d.name,
+          zone: d.zone as 'internal' | 'external',
+          device_type: d.device_type,
+          vendor: d.vendor,
+          quantity: d.quantity,
+        })),
+      circuits: circuits
+        .filter((c) => c.org_id === org.id)
+        .map((c) => ({
+          id: c.id,
+          circuit_number: c.circuit_number,
+          bandwidth: c.bandwidth,
+          ip_address: c.ip_address,
+        })),
+    }))
+
+    setUnits(combined)
+  }, [])
+
+  useEffect(() => {
+    fetchOrganizations().finally(() => setLoading(false))
+  }, [fetchOrganizations])
+
+  // ── UI helpers ──
 
   function toggleExpand(id: string) {
     setExpandedUnits((prev) => {
@@ -196,47 +208,133 @@ export default function OrganizationsPage() {
     setFormCircuits(formCircuits.map((c, i) => i === idx ? { ...c, [field]: value } : c))
   }
 
-  function save() {
+  // ── Mutations ──
+
+  async function save() {
     if (!formName.trim()) return
+    setSaving(true)
 
-    const validCircuits: UnitCircuit[] = formCircuits
-      .filter((c) => c.circuit_number.trim())
-      .map((c) => ({
-        id: crypto.randomUUID(),
-        circuit_number: c.circuit_number.trim(),
-        bandwidth: c.bandwidth.trim(),
-        ip_address: c.ip_address.trim(),
-      }))
-
-    if (editingId) {
-      // Edit: update name, type, device quantities, and circuits
-      setUnits(units.map((u) => {
-        if (u.id !== editingId) return u
-        const name = formName.trim()
-        const newDevices = generateDevices(name, formType, formDeviceQty)
-        return { ...u, name, type: formType, devices: newDevices, circuits: validCircuits }
-      }))
-    } else {
-      // Create: auto-generate devices with specified quantities
+    try {
       const name = formName.trim()
+      const validCircuits = formCircuits
+        .filter((c) => c.circuit_number.trim())
+        .map((c) => ({
+          circuit_number: c.circuit_number.trim(),
+          bandwidth: c.bandwidth.trim(),
+          ip_address: c.ip_address.trim(),
+        }))
+
       const devices = generateDevices(name, formType, formDeviceQty)
-      const newUnit: OrgUnit = {
-        id: crypto.randomUUID(),
-        name,
-        type: formType,
-        devices,
-        circuits: validCircuits,
-        created_at: new Date().toISOString().slice(0, 10),
+
+      if (editingId) {
+        // Update organization
+        const { error: orgErr } = await supabase
+          .from('organizations')
+          .update({ name, type: formType })
+          .eq('id', editingId)
+        if (orgErr) throw orgErr
+
+        // Replace devices: delete existing, insert new
+        const { error: delDevErr } = await supabase
+          .from('org_devices')
+          .delete()
+          .eq('org_id', editingId)
+        if (delDevErr) throw delDevErr
+
+        if (devices.length > 0) {
+          const { error: insDevErr } = await supabase
+            .from('org_devices')
+            .insert(devices.map((d) => ({
+              org_id: editingId,
+              name: d.name,
+              zone: d.zone,
+              device_type: d.device_type,
+              vendor: d.vendor,
+              quantity: d.quantity,
+            })))
+          if (insDevErr) throw insDevErr
+        }
+
+        // Replace circuits: delete existing, insert new
+        const { error: delCirErr } = await supabase
+          .from('org_circuits')
+          .delete()
+          .eq('org_id', editingId)
+        if (delCirErr) throw delCirErr
+
+        if (validCircuits.length > 0) {
+          const { error: insCirErr } = await supabase
+            .from('org_circuits')
+            .insert(validCircuits.map((c) => ({
+              org_id: editingId,
+              circuit_number: c.circuit_number,
+              bandwidth: c.bandwidth,
+              ip_address: c.ip_address,
+            })))
+          if (insCirErr) throw insCirErr
+        }
+      } else {
+        // Create new organization
+        const { data: newOrg, error: orgErr } = await supabase
+          .from('organizations')
+          .insert({ name, type: formType })
+          .select()
+          .single()
+        if (orgErr || !newOrg) throw orgErr ?? new Error('Failed to create organization')
+
+        const orgId = newOrg.id
+
+        // Insert devices
+        if (devices.length > 0) {
+          const { error: insDevErr } = await supabase
+            .from('org_devices')
+            .insert(devices.map((d) => ({
+              org_id: orgId,
+              name: d.name,
+              zone: d.zone,
+              device_type: d.device_type,
+              vendor: d.vendor,
+              quantity: d.quantity,
+            })))
+          if (insDevErr) throw insDevErr
+        }
+
+        // Insert circuits
+        if (validCircuits.length > 0) {
+          const { error: insCirErr } = await supabase
+            .from('org_circuits')
+            .insert(validCircuits.map((c) => ({
+              org_id: orgId,
+              circuit_number: c.circuit_number,
+              bandwidth: c.bandwidth,
+              ip_address: c.ip_address,
+            })))
+          if (insCirErr) throw insCirErr
+        }
+
+        // Auto-expand new unit
+        setExpandedUnits((prev) => new Set([...prev, orgId]))
       }
-      setUnits([...units, newUnit])
-      setExpandedUnits((prev) => new Set([...prev, newUnit.id]))
+
+      setShowModal(false)
+      await fetchOrganizations()
+    } catch (err) {
+      console.error('Save failed:', err)
+      alert('儲存失敗，請稍後再試')
+    } finally {
+      setSaving(false)
     }
-    setShowModal(false)
   }
 
-  function removeUnit(id: string) {
-    if (confirm('確定要刪除此單位？將同時移除所有設備與電路。')) {
-      setUnits(units.filter((u) => u.id !== id))
+  async function removeUnit(id: string) {
+    if (!confirm('確定要刪除此單位？將同時移除所有設備與電路。')) return
+    try {
+      const { error } = await supabase.from('organizations').delete().eq('id', id)
+      if (error) throw error
+      await fetchOrganizations()
+    } catch (err) {
+      console.error('Delete org failed:', err)
+      alert('刪除失敗，請稍後再試')
     }
   }
 
@@ -249,35 +347,60 @@ export default function OrganizationsPage() {
     setShowCircuitModal(true)
   }
 
-  function saveCircuit() {
+  async function saveCircuit() {
     if (!editCircuitUnitId || !circuitFormNumber.trim()) return
-    setUnits(units.map((u) => {
-      if (u.id !== editCircuitUnitId) return u
-      return {
-        ...u,
-        circuits: [...u.circuits, {
-          id: crypto.randomUUID(),
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('org_circuits')
+        .insert({
+          org_id: editCircuitUnitId,
           circuit_number: circuitFormNumber.trim(),
           bandwidth: circuitFormBandwidth.trim(),
           ip_address: circuitFormIp.trim(),
-        }],
-      }
-    }))
-    setShowCircuitModal(false)
+        })
+      if (error) throw error
+      setShowCircuitModal(false)
+      await fetchOrganizations()
+    } catch (err) {
+      console.error('Save circuit failed:', err)
+      alert('新增電路失敗，請稍後再試')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function removeCircuit(unitId: string, circuitId: string) {
-    setUnits(units.map((u) => {
-      if (u.id !== unitId) return u
-      return { ...u, circuits: u.circuits.filter((c) => c.id !== circuitId) }
-    }))
+  async function removeCircuit(unitId: string, circuitId: string) {
+    try {
+      const { error } = await supabase.from('org_circuits').delete().eq('id', circuitId)
+      if (error) throw error
+      await fetchOrganizations()
+    } catch (err) {
+      console.error('Delete circuit failed:', err)
+    }
   }
 
-  function removeDevice(unitId: string, deviceId: string) {
-    setUnits(units.map((u) => {
-      if (u.id !== unitId) return u
-      return { ...u, devices: u.devices.filter((d) => d.id !== deviceId) }
-    }))
+  async function removeDevice(unitId: string, deviceId: string) {
+    try {
+      const { error } = await supabase.from('org_devices').delete().eq('id', deviceId)
+      if (error) throw error
+      await fetchOrganizations()
+    } catch (err) {
+      console.error('Delete device failed:', err)
+    }
+  }
+
+  // ── Loading state ──
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" />
+          <span className="ml-2 text-[var(--color-text-muted)]">載入中...</span>
+        </div>
+      </AppShell>
+    )
   }
 
   const totalDevices = units.reduce((sum, u) => sum + u.devices.reduce((s, d) => s + (d.quantity || 1), 0), 0)
@@ -581,7 +704,9 @@ export default function OrganizationsPage() {
 
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={save} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">
+            <button onClick={save} disabled={saving}
+              className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editingId ? '更新' : '新增'}
             </button>
           </div>
@@ -608,7 +733,11 @@ export default function OrganizationsPage() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowCircuitModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveCircuit} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">新增</button>
+            <button onClick={saveCircuit} disabled={saving}
+              className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              新增
+            </button>
           </div>
         </div>
       </Modal>

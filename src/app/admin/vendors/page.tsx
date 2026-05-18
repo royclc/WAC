@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Search, Store } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Store, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 export interface Vendor {
   id: string
@@ -14,23 +15,27 @@ export interface Vendor {
   description: string
 }
 
-const DEMO_VENDORS: Vendor[] = [
-  { id: 'v1', name: '宏華', contact_person: '李經理', phone: '02-1234-5678', email: 'lee@honghua.com', description: '網路設備供應商' },
-  { id: 'v2', name: 'HPE', contact_person: '張業務', phone: '02-8765-4321', email: 'chang@hpe.com', description: 'x86伺服器供應商' },
-  { id: 'v3', name: 'NetApp', contact_person: '王工程師', phone: '02-2222-3333', email: 'wang@netapp.com', description: '儲存設備供應商' },
-]
-
 export default function VendorsPage() {
-  const [vendors, setVendors] = useState<Vendor[]>(DEMO_VENDORS)
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Vendor | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const [formName, setFormName] = useState('')
   const [formContact, setFormContact] = useState('')
   const [formPhone, setFormPhone] = useState('')
   const [formEmail, setFormEmail] = useState('')
   const [formDesc, setFormDesc] = useState('')
+
+  const fetchVendors = useCallback(async () => {
+    const { data, error } = await supabase.from('vendors').select('*').order('created_at')
+    if (!error && data) setVendors(data)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchVendors() }, [fetchVendors])
 
   const filtered = vendors.filter((v) => {
     if (search && !v.name.toLowerCase().includes(search.toLowerCase()) && !v.contact_person.includes(search)) return false
@@ -49,21 +54,37 @@ export default function VendorsPage() {
     setShowModal(true)
   }
 
-  function save() {
+  async function save() {
     if (!formName) return
-    const item: Vendor = {
-      id: editing?.id || crypto.randomUUID(),
-      name: formName, contact_person: formContact, phone: formPhone, email: formEmail, description: formDesc,
-    }
+    setSaving(true)
+    const payload = { name: formName, contact_person: formContact, phone: formPhone, email: formEmail, description: formDesc }
+
     if (editing) {
-      setVendors(vendors.map((v) => (v.id === editing.id ? item : v)))
+      await supabase.from('vendors').update(payload).eq('id', editing.id)
     } else {
-      setVendors([...vendors, item])
+      await supabase.from('vendors').insert(payload)
     }
+    setSaving(false)
     setShowModal(false)
+    fetchVendors()
   }
 
-  function remove(id: string) { setVendors(vendors.filter((v) => v.id !== id)) }
+  async function remove(id: string) {
+    if (!confirm('確定要刪除此廠商？')) return
+    await supabase.from('vendors').delete().eq('id', id)
+    fetchVendors()
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" />
+          <span className="ml-2 text-[var(--color-text-muted)]">載入中...</span>
+        </div>
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell>
@@ -144,7 +165,10 @@ export default function VendorsPage() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={save} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+              儲存
+            </button>
           </div>
         </div>
       </Modal>

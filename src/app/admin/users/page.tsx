@@ -1,85 +1,78 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Shield, User } from 'lucide-react'
-import type { UserRole } from '@/types/database'
+import { Plus, Pencil, Trash2, Shield, User, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 interface LocalUser {
   id: string
   email: string
   name: string
-  role: UserRole
-  department: string
+  role: 'admin' | 'user'
   is_active: boolean
 }
 
-const DEMO_USERS: LocalUser[] = [
-  { id: '1', email: 'admin@mac.local', name: '管理員', role: 'admin', department: '資訊室', is_active: true },
-  { id: '2', email: 'wang@mac.local', name: '王小明', role: 'user', department: '資訊室', is_active: true },
-  { id: '3', email: 'chen@mac.local', name: '陳美麗', role: 'user', department: '資訊室', is_active: true },
-  { id: '4', email: 'lin@mac.local', name: '林志偉', role: 'user', department: '網路組', is_active: true },
-  { id: '5', email: 'chang@mac.local', name: '張雅琪', role: 'user', department: '網路組', is_active: true },
-  { id: '6', email: 'lee@mac.local', name: '李大同', role: 'user', department: '系統組', is_active: true },
-]
-
 export default function UsersPage() {
-  const [users, setUsers] = useState<LocalUser[]>(DEMO_USERS)
+  const [users, setUsers] = useState<LocalUser[]>([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<LocalUser | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const [formName, setFormName] = useState('')
   const [formEmail, setFormEmail] = useState('')
-  const [formRole, setFormRole] = useState<UserRole>('user')
-  const [formDept, setFormDept] = useState('')
-  const [formPassword, setFormPassword] = useState('')
+  const [formRole, setFormRole] = useState<'admin' | 'user'>('user')
+
+  const fetch_ = useCallback(async () => {
+    const { data } = await supabase.from('users').select('*').order('created_at')
+    if (data) setUsers(data)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetch_() }, [fetch_])
 
   function openNew() {
     setEditingUser(null)
-    setFormName('')
-    setFormEmail('')
-    setFormRole('user')
-    setFormDept('')
-    setFormPassword('')
+    setFormName(''); setFormEmail(''); setFormRole('user')
     setShowModal(true)
   }
 
   function openEdit(user: LocalUser) {
     setEditingUser(user)
-    setFormName(user.name)
-    setFormEmail(user.email)
-    setFormRole(user.role)
-    setFormDept(user.department)
-    setFormPassword('')
+    setFormName(user.name); setFormEmail(user.email); setFormRole(user.role)
     setShowModal(true)
   }
 
-  function saveUser() {
+  async function saveUser() {
     if (!formName || !formEmail) return
-    const newUser: LocalUser = {
-      id: editingUser?.id || crypto.randomUUID(),
-      email: formEmail,
-      name: formName,
-      role: formRole,
-      department: formDept,
-      is_active: true,
-    }
+    setSaving(true)
+    const payload = { name: formName, email: formEmail, role: formRole }
     if (editingUser) {
-      setUsers(users.map((u) => (u.id === editingUser.id ? newUser : u)))
+      await supabase.from('users').update(payload).eq('id', editingUser.id)
     } else {
-      setUsers([...users, newUser])
+      await supabase.from('users').insert(payload)
     }
+    setSaving(false)
     setShowModal(false)
+    fetch_()
   }
 
-  function deleteUser(id: string) {
-    setUsers(users.filter((u) => u.id !== id))
+  async function deleteUser(id: string) {
+    if (!confirm('確定刪除此使用者？')) return
+    await supabase.from('users').delete().eq('id', id)
+    fetch_()
   }
 
-  function toggleActive(id: string) {
-    setUsers(users.map((u) => (u.id === id ? { ...u, is_active: !u.is_active } : u)))
+  async function toggleActive(id: string) {
+    const user = users.find((u) => u.id === id)
+    if (!user) return
+    await supabase.from('users').update({ is_active: !user.is_active }).eq('id', id)
+    fetch_()
   }
+
+  if (loading) return <AppShell><div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" /><span className="ml-2 text-[var(--color-text-muted)]">載入中...</span></div></AppShell>
 
   return (
     <AppShell>
@@ -97,7 +90,6 @@ export default function UsersPage() {
               <th className="text-left px-4 py-3 font-medium">姓名</th>
               <th className="text-left px-4 py-3 font-medium">Email</th>
               <th className="text-left px-4 py-3 font-medium">角色</th>
-              <th className="text-left px-4 py-3 font-medium">部門</th>
               <th className="text-left px-4 py-3 font-medium">狀態</th>
               <th className="text-right px-4 py-3 font-medium">操作</th>
             </tr>
@@ -109,7 +101,7 @@ export default function UsersPage() {
                 <td className="px-4 py-3 text-[var(--color-text-muted)]">{user.email}</td>
                 <td className="px-4 py-3">
                   {user.role === 'admin' ? (
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-900/30 text-purple-300">
                       <Shield className="w-3 h-3" /> 管理員
                     </span>
                   ) : (
@@ -118,12 +110,9 @@ export default function UsersPage() {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3">{user.department}</td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleActive(user.id)}
-                    className={`text-xs px-2 py-0.5 rounded-full ${user.is_active ? 'bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)]' : 'bg-[var(--color-badge-red)] text-[var(--color-badge-red-text)]'}`}
-                  >
+                  <button onClick={() => toggleActive(user.id)}
+                    className={`text-xs px-2 py-0.5 rounded-full ${user.is_active ? 'bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)]' : 'bg-[var(--color-badge-red)] text-[var(--color-badge-red-text)]'}`}>
                     {user.is_active ? '啟用' : '停用'}
                   </button>
                 </td>
@@ -135,6 +124,7 @@ export default function UsersPage() {
             ))}
           </tbody>
         </table>
+        {users.length === 0 && <div className="text-center py-8 text-[var(--color-text-muted)]">尚無使用者</div>}
       </div>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editingUser ? '編輯使用者' : '新增使用者'}>
@@ -148,23 +138,17 @@ export default function UsersPage() {
             <input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{editingUser ? '新密碼（留空不變）' : '密碼 *'}</label>
-            <input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
-          </div>
-          <div>
             <label className="block text-sm font-medium mb-1">角色</label>
-            <select value={formRole} onChange={(e) => setFormRole(e.target.value as UserRole)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
+            <select value={formRole} onChange={(e) => setFormRole(e.target.value as 'admin' | 'user')} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
               <option value="user">使用者</option>
               <option value="admin">管理員</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">部門</label>
-            <input value={formDept} onChange={(e) => setFormDept(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
-          </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveUser} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={saveUser} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />} 儲存
+            </button>
           </div>
         </div>
       </Modal>

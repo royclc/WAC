@@ -1,8 +1,32 @@
 'use client'
 
+/*
+ * 需要在 Supabase 建立以下 RPC function：
+ *
+ * CREATE OR REPLACE FUNCTION verify_password(user_email TEXT, user_password TEXT)
+ * RETURNS TABLE(id UUID, name TEXT, email TEXT, role TEXT) AS $$
+ * BEGIN
+ *   RETURN QUERY
+ *   SELECT u.id, u.name, u.email, u.role
+ *   FROM users u
+ *   WHERE u.email = user_email
+ *     AND u.password_hash = crypt(user_password, u.password_hash)
+ *     AND u.is_active = true;
+ * END;
+ * $$ LANGUAGE plpgsql SECURITY DEFINER;
+ */
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Server, Activity, Shield } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+
+interface UserInfo {
+  id: string
+  name: string
+  email: string
+  role: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -16,13 +40,42 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    // TODO: 連接 Supabase Auth
-    if (email && password) {
-      router.push('/calendar')
-    } else {
+    if (!email || !password) {
       setError('請輸入帳號和密碼')
+      setLoading(false)
+      return
     }
-    setLoading(false)
+
+    try {
+      // 透過 Supabase RPC 驗證密碼（使用 pgcrypto crypt）
+      const { data, error: rpcError } = await supabase.rpc('verify_password', {
+        user_email: email,
+        user_password: password,
+      })
+
+      if (rpcError) {
+        console.error('[Login] RPC error:', rpcError)
+        setError('登入失敗，請稍後再試')
+        setLoading(false)
+        return
+      }
+
+      const users = data as UserInfo[] | null
+      if (!users || users.length === 0) {
+        setError('帳號或密碼錯誤')
+        setLoading(false)
+        return
+      }
+
+      const user = users[0]
+      localStorage.setItem('user', JSON.stringify(user))
+      router.push('/calendar')
+    } catch (err) {
+      console.error('[Login] unexpected error:', err)
+      setError('登入時發生錯誤')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

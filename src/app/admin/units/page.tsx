@@ -1,24 +1,12 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Upload, Pencil, Trash2, Search, Building2, ChevronRight, ChevronDown, Globe, Lock } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Plus, Upload, Pencil, Trash2, Search, Building2, ChevronRight, ChevronDown, Globe, Lock, Loader2 } from 'lucide-react'
 
-type UnitCategory = 'headquarters' | 'branch'
-type SubUnit = 'a_office' | 'b_branch' | 'c_office'
 type NetworkZone = 'internal' | 'external'
-
-const CATEGORY_LABELS: Record<UnitCategory, string> = {
-  headquarters: '總局',
-  branch: '分局稽徵所',
-}
-
-const SUB_UNIT_LABELS: Record<SubUnit, string> = {
-  a_office: 'a稽徵所',
-  b_branch: 'b分局',
-  c_office: 'c稽徵所',
-}
 
 const ZONE_LABELS: Record<NetworkZone, string> = {
   internal: '內網',
@@ -28,90 +16,99 @@ const ZONE_LABELS: Record<NetworkZone, string> = {
 const HQ_DEVICE_TYPES = ['防火牆', '核心交換器', '主機交換器', '邊界交換器', '聚合交換器']
 const BRANCH_DEVICE_TYPES = ['防火牆', '前端交換器', '聚合交換器']
 
+interface Organization {
+  id: string
+  name: string
+  type: 'headquarters' | 'branch' | 'office'
+}
+
 interface NetworkDevice {
   id: string
   name: string
-  category: UnitCategory
-  sub_unit: SubUnit | null
+  org_id: string
+  org_name: string
   zone: NetworkZone
   device_type: string
   quantity: number
   vendor: string
-  description: string
-  is_active: boolean
 }
 
-const DEMO_DEVICES: NetworkDevice[] = [
-  // 總局 - 內網
-  { id: 'hi1', name: '總局內網防火牆', category: 'headquarters', sub_unit: null, zone: 'internal', device_type: '防火牆', quantity: 2, vendor: '宏華', description: '內網主要防火牆', is_active: true },
-  { id: 'hi2', name: '總局內網核心交換器', category: 'headquarters', sub_unit: null, zone: 'internal', device_type: '核心交換器', quantity: 2, vendor: '宏華', description: '內網核心交換', is_active: true },
-  { id: 'hi3', name: '總局內網主機交換器', category: 'headquarters', sub_unit: null, zone: 'internal', device_type: '主機交換器', quantity: 6, vendor: '宏華', description: '主機區交換器', is_active: true },
-  { id: 'hi4', name: '總局內網邊界交換器', category: 'headquarters', sub_unit: null, zone: 'internal', device_type: '邊界交換器', quantity: 2, vendor: '宏華', description: '內網邊界', is_active: true },
-  { id: 'hi5', name: '總局內網聚合交換器', category: 'headquarters', sub_unit: null, zone: 'internal', device_type: '聚合交換器', quantity: 4, vendor: '宏華', description: '內網聚合', is_active: true },
-  // 總局 - 外網
-  { id: 'he1', name: '總局外網防火牆', category: 'headquarters', sub_unit: null, zone: 'external', device_type: '防火牆', quantity: 2, vendor: '宏華', description: '外網主要防火牆', is_active: true },
-  { id: 'he2', name: '總局外網核心交換器', category: 'headquarters', sub_unit: null, zone: 'external', device_type: '核心交換器', quantity: 2, vendor: '宏華', description: '外網核心交換', is_active: true },
-  { id: 'he3', name: '總局外網主機交換器', category: 'headquarters', sub_unit: null, zone: 'external', device_type: '主機交換器', quantity: 4, vendor: '宏華', description: '外網主機交換', is_active: true },
-  { id: 'he4', name: '總局外網邊界交換器', category: 'headquarters', sub_unit: null, zone: 'external', device_type: '邊界交換器', quantity: 2, vendor: '宏華', description: '外網邊界', is_active: true },
-  { id: 'he5', name: '總局外網聚合交換器', category: 'headquarters', sub_unit: null, zone: 'external', device_type: '聚合交換器', quantity: 2, vendor: '宏華', description: '外網聚合', is_active: true },
-  // a稽徵所 - 內網
-  { id: 'ai1', name: 'a稽徵所內網防火牆', category: 'branch', sub_unit: 'a_office', zone: 'internal', device_type: '防火牆', quantity: 1, vendor: '宏華', description: '內網防火牆', is_active: true },
-  { id: 'ai2', name: 'a稽徵所內網前端交換器', category: 'branch', sub_unit: 'a_office', zone: 'internal', device_type: '前端交換器', quantity: 1, vendor: '宏華', description: '內網前端交換', is_active: true },
-  { id: 'ai3', name: 'a稽徵所內網聚合交換器', category: 'branch', sub_unit: 'a_office', zone: 'internal', device_type: '聚合交換器', quantity: 1, vendor: '宏華', description: '內網聚合', is_active: true },
-  // a稽徵所 - 外網
-  { id: 'ae1', name: 'a稽徵所外網防火牆', category: 'branch', sub_unit: 'a_office', zone: 'external', device_type: '防火牆', quantity: 1, vendor: '宏華', description: '外網防火牆', is_active: true },
-  { id: 'ae2', name: 'a稽徵所外網前端交換器', category: 'branch', sub_unit: 'a_office', zone: 'external', device_type: '前端交換器', quantity: 1, vendor: '宏華', description: '外網前端交換', is_active: true },
-  { id: 'ae3', name: 'a稽徵所外網聚合交換器', category: 'branch', sub_unit: 'a_office', zone: 'external', device_type: '聚合交換器', quantity: 1, vendor: '宏華', description: '外網聚合', is_active: true },
-  // b分局
-  { id: 'bi1', name: 'b分局內網防火牆', category: 'branch', sub_unit: 'b_branch', zone: 'internal', device_type: '防火牆', quantity: 1, vendor: '宏華', description: '內網防火牆', is_active: true },
-  { id: 'bi2', name: 'b分局內網前端交換器', category: 'branch', sub_unit: 'b_branch', zone: 'internal', device_type: '前端交換器', quantity: 1, vendor: '宏華', description: '內網前端交換', is_active: true },
-  { id: 'bi3', name: 'b分局內網聚合交換器', category: 'branch', sub_unit: 'b_branch', zone: 'internal', device_type: '聚合交換器', quantity: 1, vendor: '宏華', description: '內網聚合', is_active: true },
-  { id: 'be1', name: 'b分局外網防火牆', category: 'branch', sub_unit: 'b_branch', zone: 'external', device_type: '防火牆', quantity: 1, vendor: '宏華', description: '外網防火牆', is_active: true },
-  { id: 'be2', name: 'b分局外網前端交換器', category: 'branch', sub_unit: 'b_branch', zone: 'external', device_type: '前端交換器', quantity: 1, vendor: '宏華', description: '外網前端交換', is_active: true },
-  { id: 'be3', name: 'b分局外網聚合交換器', category: 'branch', sub_unit: 'b_branch', zone: 'external', device_type: '聚合交換器', quantity: 1, vendor: '宏華', description: '外網聚合', is_active: true },
-  // c稽徵所
-  { id: 'ci1', name: 'c稽徵所內網防火牆', category: 'branch', sub_unit: 'c_office', zone: 'internal', device_type: '防火牆', quantity: 1, vendor: '宏華', description: '內網防火牆', is_active: true },
-  { id: 'ci2', name: 'c稽徵所內網前端交換器', category: 'branch', sub_unit: 'c_office', zone: 'internal', device_type: '前端交換器', quantity: 1, vendor: '宏華', description: '內網前端交換', is_active: true },
-  { id: 'ci3', name: 'c稽徵所內網聚合交換器', category: 'branch', sub_unit: 'c_office', zone: 'internal', device_type: '聚合交換器', quantity: 1, vendor: '宏華', description: '內網聚合', is_active: true },
-  { id: 'ce1', name: 'c稽徵所外網防火牆', category: 'branch', sub_unit: 'c_office', zone: 'external', device_type: '防火牆', quantity: 1, vendor: '宏華', description: '外網防火牆', is_active: true },
-  { id: 'ce2', name: 'c稽徵所外網前端交換器', category: 'branch', sub_unit: 'c_office', zone: 'external', device_type: '前端交換器', quantity: 1, vendor: '宏華', description: '外網前端交換', is_active: true },
-  { id: 'ce3', name: 'c稽徵所外網聚合交換器', category: 'branch', sub_unit: 'c_office', zone: 'external', device_type: '聚合交換器', quantity: 1, vendor: '宏華', description: '外網聚合', is_active: true },
-]
-
 export default function UnitsPage() {
-  const [devices, setDevices] = useState<NetworkDevice[]>(DEMO_DEVICES)
+  const [devices, setDevices] = useState<NetworkDevice[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState<'all' | UnitCategory>('all')
-  const [filterSubUnit, setFilterSubUnit] = useState<'all' | SubUnit>('all')
+  const [filterCategory, setFilterCategory] = useState<'all' | 'headquarters' | 'branch'>('all')
+  const [filterOrgId, setFilterOrgId] = useState<string>('all')
   const [filterZone, setFilterZone] = useState<'all' | NetworkZone>('all')
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [editingDevice, setEditingDevice] = useState<NetworkDevice | null>(null)
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['headquarters', 'a_office', 'b_branch', 'c_office']))
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [importText, setImportText] = useState('')
 
   const [formName, setFormName] = useState('')
-  const [formCategory, setFormCategory] = useState<UnitCategory>('headquarters')
-  const [formSubUnit, setFormSubUnit] = useState<SubUnit | ''>('')
+  const [formOrgId, setFormOrgId] = useState('')
   const [formZone, setFormZone] = useState<NetworkZone>('internal')
   const [formDeviceType, setFormDeviceType] = useState('')
   const [formQuantity, setFormQuantity] = useState(1)
   const [formVendor, setFormVendor] = useState('宏華')
-  const [formDesc, setFormDesc] = useState('')
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const [orgRes, devRes] = await Promise.all([
+      supabase.from('organizations').select('id, name, type').order('name'),
+      supabase.from('org_devices').select('id, org_id, name, zone, device_type, vendor, quantity, organizations(name, type)').order('name'),
+    ])
+    if (orgRes.data) {
+      setOrganizations(orgRes.data as Organization[])
+      setExpandedGroups((prev) => {
+        if (prev.size > 0) return prev
+        return new Set(orgRes.data.map((o: Organization) => o.id))
+      })
+    }
+    if (devRes.data) {
+      const mapped: NetworkDevice[] = (devRes.data as any[]).map((d) => ({
+        id: d.id,
+        name: d.name,
+        org_id: d.org_id,
+        org_name: (d.organizations as any)?.name ?? '',
+        zone: d.zone as NetworkZone,
+        device_type: d.device_type,
+        quantity: d.quantity,
+        vendor: d.vendor ?? '',
+      }))
+      setDevices(mapped)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // derive org type lookup
+  const orgTypeMap = new Map(organizations.map((o) => [o.id, o.type]))
 
   const filtered = devices.filter((d) => {
-    if (filterCategory !== 'all' && d.category !== filterCategory) return false
-    if (filterSubUnit !== 'all' && d.sub_unit !== filterSubUnit) return false
+    if (filterCategory !== 'all') {
+      const orgType = orgTypeMap.get(d.org_id)
+      if (filterCategory === 'headquarters' && orgType !== 'headquarters') return false
+      if (filterCategory === 'branch' && orgType === 'headquarters') return false
+    }
+    if (filterOrgId !== 'all' && d.org_id !== filterOrgId) return false
     if (filterZone !== 'all' && d.zone !== filterZone) return false
     if (search && !d.name.toLowerCase().includes(search.toLowerCase()) && !d.device_type.includes(search)) return false
     return true
   })
 
-  const grouped = {
-    headquarters: filtered.filter((d) => d.category === 'headquarters'),
-    a_office: filtered.filter((d) => d.sub_unit === 'a_office'),
-    b_branch: filtered.filter((d) => d.sub_unit === 'b_branch'),
-    c_office: filtered.filter((d) => d.sub_unit === 'c_office'),
+  // group by org_name, ordered by organizations order
+  const orgOrder = organizations.map((o) => o.id)
+  const grouped: { orgId: string; orgName: string; orgType: string; items: NetworkDevice[] }[] = []
+  for (const org of organizations) {
+    const items = filtered.filter((d) => d.org_id === org.id)
+    if (items.length > 0 || filterCategory === 'all') {
+      grouped.push({ orgId: org.id, orgName: org.name, orgType: org.type, items })
+    }
   }
 
   function toggleGroup(key: string) {
@@ -123,64 +120,82 @@ export default function UnitsPage() {
     })
   }
 
-  const availableDeviceTypes = formCategory === 'headquarters' ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES
+  const selectedOrg = organizations.find((o) => o.id === formOrgId)
+  const isHqOrg = selectedOrg?.type === 'headquarters'
+  const availableDeviceTypes = isHqOrg ? HQ_DEVICE_TYPES : BRANCH_DEVICE_TYPES
 
   function openNew() {
     setEditingDevice(null)
-    setFormName(''); setFormCategory('headquarters'); setFormSubUnit(''); setFormZone('internal'); setFormDeviceType(HQ_DEVICE_TYPES[0]); setFormQuantity(1); setFormVendor('宏華'); setFormDesc('')
+    setFormName(''); setFormOrgId(organizations[0]?.id ?? ''); setFormZone('internal'); setFormDeviceType(HQ_DEVICE_TYPES[0]); setFormQuantity(1); setFormVendor('宏華')
     setShowModal(true)
   }
 
   function openEdit(device: NetworkDevice) {
     setEditingDevice(device)
-    setFormName(device.name); setFormCategory(device.category); setFormSubUnit(device.sub_unit || ''); setFormZone(device.zone); setFormDeviceType(device.device_type); setFormQuantity(device.quantity); setFormVendor(device.vendor); setFormDesc(device.description)
+    setFormName(device.name); setFormOrgId(device.org_id); setFormZone(device.zone); setFormDeviceType(device.device_type); setFormQuantity(device.quantity); setFormVendor(device.vendor)
     setShowModal(true)
   }
 
-  function saveDevice() {
-    if (!formName) return
-    const newDevice: NetworkDevice = {
-      id: editingDevice?.id || crypto.randomUUID(),
+  async function saveDevice() {
+    if (!formName || !formOrgId) return
+    setSaving(true)
+    const payload = {
       name: formName,
-      category: formCategory,
-      sub_unit: formCategory === 'branch' ? (formSubUnit as SubUnit) || 'a_office' : null,
+      org_id: formOrgId,
       zone: formZone,
       device_type: formDeviceType,
       quantity: formQuantity,
       vendor: formVendor,
-      description: formDesc,
-      is_active: true,
     }
     if (editingDevice) {
-      setDevices(devices.map((d) => (d.id === editingDevice.id ? newDevice : d)))
+      await supabase.from('org_devices').update(payload).eq('id', editingDevice.id)
     } else {
-      setDevices([...devices, newDevice])
+      await supabase.from('org_devices').insert(payload)
     }
+    setSaving(false)
     setShowModal(false)
+    fetchData()
   }
 
-  function deleteDevice(id: string) { setDevices(devices.filter((d) => d.id !== id)) }
+  async function deleteDevice(id: string) {
+    await supabase.from('org_devices').delete().eq('id', id)
+    fetchData()
+  }
 
-  function handleImport() {
+  async function handleImport() {
     const lines = importText.trim().split('\n').filter((l) => l.trim())
-    const newDevices: NetworkDevice[] = lines.map((line) => {
+    const orgNameMap = new Map(organizations.map((o) => [o.name, o.id]))
+    const rows = lines.map((line) => {
       const parts = line.split(',').map((s) => s.trim())
-      const cat = parts[1] === 'branch' ? 'branch' : 'headquarters'
-      const sub = cat === 'branch' ? (parts[2] as SubUnit || 'a_office') : null
-      const zone: NetworkZone = parts[3] === 'external' ? 'external' : 'internal'
+      const orgId = orgNameMap.get(parts[1] ?? '') ?? ''
+      const zone: NetworkZone = parts[2] === 'external' ? 'external' : 'internal'
       return {
-        id: crypto.randomUUID(), name: parts[0] || '', category: cat as UnitCategory,
-        sub_unit: sub, zone, device_type: parts[4] || '', quantity: parseInt(parts[5]) || 1, vendor: parts[6] || '宏華', description: parts[7] || '', is_active: true,
+        name: parts[0] || '',
+        org_id: orgId,
+        zone,
+        device_type: parts[3] || '',
+        quantity: parseInt(parts[4]) || 1,
+        vendor: parts[5] || '宏華',
       }
-    }).filter((d) => d.name)
-    setDevices([...devices, ...newDevices])
-    setShowImportModal(false); setImportText('')
+    }).filter((d) => d.name && d.org_id)
+    if (rows.length > 0) {
+      setSaving(true)
+      await supabase.from('org_devices').insert(rows)
+      setSaving(false)
+      fetchData()
+    }
+    setShowImportModal(false)
+    setImportText('')
   }
 
-  const hqCount = devices.filter((d) => d.category === 'headquarters').length
-  const branchCount = devices.filter((d) => d.category === 'branch').length
+  // stats
+  const hqCount = devices.filter((d) => orgTypeMap.get(d.org_id) === 'headquarters').length
+  const branchCount = devices.length - hqCount
   const internalCount = devices.filter((d) => d.zone === 'internal').length
   const externalCount = devices.filter((d) => d.zone === 'external').length
+
+  // filtered orgs for sub-unit filter
+  const branchOrgs = organizations.filter((o) => o.type === 'branch' || o.type === 'office')
 
   function renderDeviceRow(device: NetworkDevice, indent: number) {
     return (
@@ -199,12 +214,22 @@ export default function UnitsPage() {
         <td className="px-4 py-3">
           <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{device.vendor}</span>
         </td>
-        <td className="px-4 py-3 text-[var(--color-text-muted)]">{device.description}</td>
         <td className="px-4 py-3 text-right">
           <button onClick={() => openEdit(device)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
           <button onClick={() => deleteDevice(device.id)} className="p-1 hover:bg-[var(--color-danger-dim)] text-[var(--color-danger)] rounded"><Trash2 className="w-4 h-4" /></button>
         </td>
       </tr>
+    )
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" />
+          <span className="ml-2 text-[var(--color-text-muted)]">載入中...</span>
+        </div>
+      </AppShell>
     )
   }
 
@@ -244,17 +269,17 @@ export default function UnitsPage() {
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
           {[{ k: 'all', l: '全部' }, { k: 'headquarters', l: '總局' }, { k: 'branch', l: '分局稽徵所' }].map(({ k, l }) => (
-            <button key={k} onClick={() => { setFilterCategory(k as 'all' | UnitCategory); setFilterSubUnit('all') }}
+            <button key={k} onClick={() => { setFilterCategory(k as 'all' | 'headquarters' | 'branch'); setFilterOrgId('all') }}
               className={`px-3 py-1.5 text-sm ${filterCategory === k ? 'bg-[var(--color-primary)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>
               {l}
             </button>
           ))}
         </div>
-        {filterCategory === 'branch' && (
+        {filterCategory === 'branch' && branchOrgs.length > 0 && (
           <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-            <button onClick={() => setFilterSubUnit('all')} className={`px-3 py-1.5 text-sm ${filterSubUnit === 'all' ? 'bg-[var(--color-success)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>全部</button>
-            {Object.entries(SUB_UNIT_LABELS).map(([k, l]) => (
-              <button key={k} onClick={() => setFilterSubUnit(k as SubUnit)} className={`px-3 py-1.5 text-sm ${filterSubUnit === k ? 'bg-[var(--color-success)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>{l}</button>
+            <button onClick={() => setFilterOrgId('all')} className={`px-3 py-1.5 text-sm ${filterOrgId === 'all' ? 'bg-[var(--color-success)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>全部</button>
+            {branchOrgs.map((org) => (
+              <button key={org.id} onClick={() => setFilterOrgId(org.id)} className={`px-3 py-1.5 text-sm ${filterOrgId === org.id ? 'bg-[var(--color-success)] text-white' : 'hover:bg-[var(--color-hover)]'}`}>{org.name}</button>
             ))}
           </div>
         )}
@@ -281,59 +306,34 @@ export default function UnitsPage() {
               <th className="text-left px-4 py-3 font-medium">設備類型</th>
               <th className="text-right px-4 py-3 font-medium">數量</th>
               <th className="text-left px-4 py-3 font-medium">廠商</th>
-              <th className="text-left px-4 py-3 font-medium">說明</th>
               <th className="text-right px-4 py-3 font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
-            {(filterCategory === 'all' || filterCategory === 'headquarters') && filterSubUnit === 'all' && (
-              <>
-                <tr>
-                  <td colSpan={7} className="p-0">
-                    <button onClick={() => toggleGroup('headquarters')} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium bg-purple-900/30 hover:bg-purple-900/50 transition-colors text-purple-300">
-                      {expandedGroups.has('headquarters') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      <Building2 className="w-4 h-4" /> 總局
-                      <span className="text-xs opacity-60 ml-1">({grouped.headquarters.length})</span>
-                    </button>
-                  </td>
-                </tr>
-                {expandedGroups.has('headquarters') && grouped.headquarters.map((d) => renderDeviceRow(d, 40))}
-              </>
-            )}
+            {grouped.map((group) => {
+              const isHq = group.orgType === 'headquarters'
+              // Apply category filter to groups
+              if (filterCategory === 'headquarters' && !isHq) return null
+              if (filterCategory === 'branch' && isHq) return null
+              if (filterOrgId !== 'all' && group.orgId !== filterOrgId) return null
+              if (group.items.length === 0) return null
 
-            {(filterCategory === 'all' || filterCategory === 'branch') && (
-              <>
-                {filterCategory === 'all' && (
+              return (
+                <React.Fragment key={group.orgId}>
                   <tr>
-                    <td colSpan={7} className="p-0">
-                      <div className="px-4 py-2.5 text-sm font-medium bg-[var(--color-badge-green)] text-[var(--color-badge-green-text)] flex items-center gap-2">
-                        <Building2 className="w-4 h-4" /> 分局稽徵所
-                        <span className="text-xs opacity-60 ml-1">({branchCount})</span>
-                      </div>
+                    <td colSpan={6} className="p-0">
+                      <button onClick={() => toggleGroup(group.orgId)}
+                        className={`flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium transition-colors ${isHq ? 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-300' : 'bg-[var(--color-table-header)] hover:bg-[var(--color-hover)]'}`}>
+                        {expandedGroups.has(group.orgId) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <Building2 className="w-4 h-4" /> {group.orgName}
+                        <span className="text-xs opacity-60 ml-1">({group.items.length})</span>
+                      </button>
                     </td>
                   </tr>
-                )}
-                {Object.entries(SUB_UNIT_LABELS).map(([subKey, subLabel]) => {
-                  const items = grouped[subKey as keyof typeof grouped]
-                  if (filterSubUnit !== 'all' && filterSubUnit !== subKey) return null
-                  if (items.length === 0 && filterCategory !== 'all') return null
-                  return (
-                    <React.Fragment key={subKey}>
-                      <tr>
-                        <td colSpan={7} className="p-0">
-                          <button onClick={() => toggleGroup(subKey)} className="flex items-center gap-2 w-full px-4 pl-8 py-2 text-sm font-medium bg-[var(--color-table-header)] hover:bg-[var(--color-hover)] transition-colors">
-                            {expandedGroups.has(subKey) ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            {subLabel}
-                            <span className="text-xs text-[var(--color-text-muted)] ml-1">({items.length})</span>
-                          </button>
-                        </td>
-                      </tr>
-                      {expandedGroups.has(subKey) && items.map((d) => renderDeviceRow(d, 56))}
-                    </React.Fragment>
-                  )
-                })}
-              </>
-            )}
+                  {expandedGroups.has(group.orgId) && group.items.map((d) => renderDeviceRow(d, isHq ? 40 : 56))}
+                </React.Fragment>
+              )
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && <div className="text-center py-8 text-[var(--color-text-muted)]">無符合條件的設備</div>}
@@ -342,22 +342,18 @@ export default function UnitsPage() {
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editingDevice ? '編輯設備' : '新增設備'}>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">類別 *</label>
-            <select value={formCategory} onChange={(e) => { setFormCategory(e.target.value as UnitCategory); if (e.target.value === 'headquarters') { setFormSubUnit(''); setFormDeviceType(HQ_DEVICE_TYPES[0]) } else { setFormDeviceType(BRANCH_DEVICE_TYPES[0]) } }}
+            <label className="block text-sm font-medium mb-1">所屬單位 *</label>
+            <select value={formOrgId} onChange={(e) => {
+              setFormOrgId(e.target.value)
+              const org = organizations.find((o) => o.id === e.target.value)
+              const isHq = org?.type === 'headquarters'
+              setFormDeviceType(isHq ? HQ_DEVICE_TYPES[0] : BRANCH_DEVICE_TYPES[0])
+            }}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              <option value="">請選擇</option>
+              {organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
             </select>
           </div>
-          {formCategory === 'branch' && (
-            <div>
-              <label className="block text-sm font-medium mb-1">所屬單位 *</label>
-              <select value={formSubUnit} onChange={(e) => setFormSubUnit(e.target.value as SubUnit)}
-                className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-                <option value="">請選擇</option>
-                {Object.entries(SUB_UNIT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-          )}
           <div>
             <label className="block text-sm font-medium mb-1">內/外網 *</label>
             <div className="flex gap-2">
@@ -390,13 +386,12 @@ export default function UnitsPage() {
             <label className="block text-sm font-medium mb-1">名稱 *</label>
             <input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">說明</label>
-            <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
-          </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={saveDevice} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">儲存</button>
+            <button onClick={saveDevice} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              儲存
+            </button>
           </div>
         </div>
       </Modal>
@@ -404,14 +399,17 @@ export default function UnitsPage() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title="匯入網路設備清單">
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-muted)]">
-            每行一筆：<code className="text-xs bg-[var(--color-bg-elevated)] px-1 rounded">名稱,類別(headquarters/branch),子單位(a_office/b_branch/c_office),網路(internal/external),設備類型,廠商,說明</code>
+            每行一筆：<code className="text-xs bg-[var(--color-bg-elevated)] px-1 rounded">名稱,所屬單位名稱,網路(internal/external),設備類型,數量,廠商</code>
           </p>
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={6}
-            placeholder={`總局內網防火牆2,headquarters,,internal,防火牆,備援防火牆\na稽徵所外網前端交換器2,branch,a_office,external,前端交換器,備援交換器`}
+            placeholder={`總局內網防火牆2,總局,internal,防火牆,2,宏華\na稽徵所外網前端交換器2,a稽徵所,external,前端交換器,1,宏華`}
             className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono text-xs" />
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
-            <button onClick={handleImport} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)]">匯入</button>
+            <button onClick={handleImport} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              匯入
+            </button>
           </div>
         </div>
       </Modal>

@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle } from 'lucide-react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import Modal from './Modal'
 import YearMonthPicker from './YearMonthPicker'
+import { supabase } from '@/lib/supabase'
 import {
   getCalendarDays,
   formatMonthTitle,
@@ -23,7 +24,7 @@ type EventPlanType = 'planned' | 'unplanned'
 interface NetworkAsset {
   id: string
   name: string
-  unit: string          // 總局, a稽徵所, b分局, c稽徵所
+  unit: string          // org name
   majorCategory: string // 總局, 分局稽徵所
   zone: 'internal' | 'external'
   deviceType: string    // 防火牆, 核心交換器, ...
@@ -72,64 +73,6 @@ const PLAN_TYPE_COLORS: Record<EventPlanType, string> = {
 const ZONE_LABELS = { internal: '內網', external: '外網' }
 
 const EVENT_TYPE_OPTIONS = ['設備維護', '線路維護', '系統更新', '電力維護', '其他']
-
-// ── Demo Assets ──
-
-const NETWORK_ASSETS: NetworkAsset[] = [
-  // 總局內網
-  { id: 'hi1', name: '總局內網防火牆', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '防火牆', quantity: 2 },
-  { id: 'hi2', name: '總局內網核心網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '核心網路交換器', quantity: 2 },
-  { id: 'hi3', name: '總局內網主機網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '主機網路交換器', quantity: 6 },
-  { id: 'hi4', name: '總局內網邊界網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '邊界網路交換器', quantity: 2 },
-  { id: 'hi5', name: '總局內網聚合網路交換器', unit: '總局', majorCategory: '總局', zone: 'internal', deviceType: '聚合網路交換器', quantity: 4 },
-  // 總局外網
-  { id: 'he1', name: '總局外網防火牆', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '防火牆', quantity: 2 },
-  { id: 'he2', name: '總局外網核心網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '核心網路交換器', quantity: 2 },
-  { id: 'he3', name: '總局外網主機網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '主機網路交換器', quantity: 4 },
-  { id: 'he4', name: '總局外網邊界網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '邊界網路交換器', quantity: 2 },
-  { id: 'he5', name: '總局外網聚合網路交換器', unit: '總局', majorCategory: '總局', zone: 'external', deviceType: '聚合網路交換器', quantity: 2 },
-  // a稽徵所
-  { id: 'ai1', name: 'a稽徵所內網防火牆', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '防火牆', quantity: 1 },
-  { id: 'ai2', name: 'a稽徵所內網前端網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ai3', name: 'a稽徵所內網聚合網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'ae1', name: 'a稽徵所外網防火牆', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '防火牆', quantity: 1 },
-  { id: 'ae2', name: 'a稽徵所外網前端網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ae3', name: 'a稽徵所外網聚合網路交換器', unit: 'a稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '聚合網路交換器', quantity: 1 },
-  // b分局
-  { id: 'bi1', name: 'b分局內網防火牆', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '防火牆', quantity: 1 },
-  { id: 'bi2', name: 'b分局內網前端網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'bi3', name: 'b分局內網聚合網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'be1', name: 'b分局外網防火牆', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'external', deviceType: '防火牆', quantity: 1 },
-  { id: 'be2', name: 'b分局外網前端網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'external', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'be3', name: 'b分局外網聚合網路交換器', unit: 'b分局', majorCategory: '分局稽徵所', zone: 'external', deviceType: '聚合網路交換器', quantity: 1 },
-  // c稽徵所
-  { id: 'ci1', name: 'c稽徵所內網防火牆', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '防火牆', quantity: 1 },
-  { id: 'ci2', name: 'c稽徵所內網前端網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ci3', name: 'c稽徵所內網聚合網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'internal', deviceType: '聚合網路交換器', quantity: 1 },
-  { id: 'ce1', name: 'c稽徵所外網防火牆', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '防火牆', quantity: 1 },
-  { id: 'ce2', name: 'c稽徵所外網前端網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '前端網路交換器', quantity: 1 },
-  { id: 'ce3', name: 'c稽徵所外網聚合網路交換器', unit: 'c稽徵所', majorCategory: '分局稽徵所', zone: 'external', deviceType: '聚合網路交換器', quantity: 1 },
-]
-
-const UNITS = [...new Set(NETWORK_ASSETS.map(a => a.unit))]
-
-// ── Demo Circuits ──
-
-const DEMO_CIRCUITS: Circuit[] = [
-  { id: 'c1', unit: '總局', circuit_number: 'xxxxd', bandwidth: '200', ip_address: '' },
-  { id: 'c2', unit: '總局', circuit_number: 'Xxxdx', bandwidth: '200', ip_address: '' },
-  { id: 'c3', unit: '總局', circuit_number: 'Xx3', bandwidth: '100', ip_address: '' },
-  { id: 'c4', unit: '總局', circuit_number: 'Xxr', bandwidth: '100/40', ip_address: '' },
-  { id: 'c5', unit: 'b分局', circuit_number: 'Xe3', bandwidth: '50', ip_address: '' },
-  { id: 'c6', unit: 'b分局', circuit_number: 'Xee', bandwidth: '60', ip_address: '' },
-  { id: 'c7', unit: 'b分局', circuit_number: 'Xxssa', bandwidth: '70', ip_address: '' },
-  { id: 'c8', unit: 'a稽徵所', circuit_number: 'Xd', bandwidth: '80', ip_address: '' },
-  { id: 'c9', unit: 'a稽徵所', circuit_number: 'Xd', bandwidth: '90', ip_address: '' },
-  { id: 'c10', unit: 'a稽徵所', circuit_number: 'Xxbb', bandwidth: '80', ip_address: '' },
-  { id: 'c11', unit: 'c稽徵所', circuit_number: 'asdfaf', bandwidth: '70', ip_address: '' },
-  { id: 'c12', unit: 'c稽徵所', circuit_number: 'asdfa', bandwidth: '50', ip_address: '' },
-  { id: 'c13', unit: 'c稽徵所', circuit_number: 'bb', bandwidth: '60', ip_address: '' },
-]
 
 // ── Helpers ──
 
@@ -186,9 +129,15 @@ function calcStats(
 export default function NetworkAvailabilityCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [events, setEvents] = useState<DowntimeEvent[]>([])
+  const [circuitEvents, setCircuitEvents] = useState<CircuitEvent[]>([])
   const [showModal, setShowModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [activeTab, setActiveTab] = useState<'deviceType' | 'unitDetail' | 'unitSummary'>('deviceType')
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
+  const [circuits, setCircuits] = useState<Circuit[]>([])
 
   const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device'>('unit')
   const [formSelectedUnit, setFormSelectedUnit] = useState('')
@@ -200,19 +149,8 @@ export default function NetworkAvailabilityCalendar() {
   const [formStart, setFormStart] = useState('')
   const [formEnd, setFormEnd] = useState('')
 
-  // Circuit events (demo: some circuits have planned/unplanned downtime)
-  const [circuitEvents, setCircuitEvents] = useState<CircuitEvent[]>([
-    // Demo: 總局 Xxxdx 計畫性 70hrs, Xx3 計畫性 70hrs
-    { id: 'ce1', circuit_id: 'c2', plan_type: 'planned', title: '線路維護', start_time: '2026-05-01T00:00', end_time: '2026-05-03T22:00' },
-    { id: 'ce2', circuit_id: 'c3', plan_type: 'planned', title: '線路維護', start_time: '2026-05-01T00:00', end_time: '2026-05-03T22:00' },
-    // Demo: a稽徵所 all circuits planned 2hrs each
-    { id: 'ce3', circuit_id: 'c8', plan_type: 'planned', title: '例行維護', start_time: '2026-05-10T08:00', end_time: '2026-05-10T10:00' },
-    { id: 'ce4', circuit_id: 'c9', plan_type: 'planned', title: '例行維護', start_time: '2026-05-10T08:00', end_time: '2026-05-10T10:00' },
-    { id: 'ce5', circuit_id: 'c10', plan_type: 'planned', title: '例行維護', start_time: '2026-05-10T08:00', end_time: '2026-05-10T10:00' },
-    // Demo: c稽徵所 asdfaf 非計畫性 1hr, bb 計畫性 9hrs
-    { id: 'ce6', circuit_id: 'c11', plan_type: 'unplanned', title: '線路斷線', start_time: '2026-05-15T14:00', end_time: '2026-05-15T15:00' },
-    { id: 'ce7', circuit_id: 'c13', plan_type: 'planned', title: '線路維護', start_time: '2026-05-20T00:00', end_time: '2026-05-20T09:00' },
-  ])
+  // ── Derived values ──
+  const UNITS = useMemo(() => [...new Set(networkAssets.map(a => a.unit))], [networkAssets])
 
   const days = getCalendarDays(currentMonth)
 
@@ -223,6 +161,99 @@ export default function NetworkAvailabilityCalendar() {
   const monthStart = new Date(year, month, 1)
   const monthEnd = new Date(year, month + 1, 1)
 
+  // ── Fetch from Supabase ──
+
+  const fetchAssets = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('org_devices')
+      .select('*, organizations(name, type)')
+    if (error) {
+      console.error('Failed to fetch org_devices:', error)
+      return
+    }
+    const mapped: NetworkAsset[] = (data || []).map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      unit: d.organizations?.name || '',
+      majorCategory: d.organizations?.type === 'headquarters' ? '總局' : '分局稽徵所',
+      zone: d.zone as 'internal' | 'external',
+      deviceType: d.device_type,
+      quantity: d.quantity,
+    }))
+    setNetworkAssets(mapped)
+  }, [])
+
+  const fetchCircuits = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('org_circuits')
+      .select('*, organizations(name)')
+    if (error) {
+      console.error('Failed to fetch org_circuits:', error)
+      return
+    }
+    const mapped: Circuit[] = (data || []).map((d: any) => ({
+      id: d.id,
+      unit: d.organizations?.name || '',
+      circuit_number: d.circuit_number,
+      bandwidth: d.bandwidth,
+      ip_address: d.ip_address || '',
+    }))
+    setCircuits(mapped)
+  }, [])
+
+  const fetchDowntimeEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('downtime_events')
+      .select('*')
+      .eq('asset_type', 'network')
+    if (error) {
+      console.error('Failed to fetch downtime_events:', error)
+      return
+    }
+    const mapped: DowntimeEvent[] = (data || []).map((d: any) => ({
+      id: d.id,
+      asset_id: d.asset_id,
+      asset_name: d.asset_name,
+      plan_type: d.plan_type as EventPlanType,
+      title: d.title,
+      description: d.description || '',
+      start_time: d.start_time,
+      end_time: d.end_time,
+    }))
+    setEvents(mapped)
+  }, [])
+
+  const fetchCircuitEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('circuit_events')
+      .select('*')
+    if (error) {
+      console.error('Failed to fetch circuit_events:', error)
+      return
+    }
+    const mapped: CircuitEvent[] = (data || []).map((d: any) => ({
+      id: d.id,
+      circuit_id: d.circuit_id,
+      plan_type: d.plan_type as EventPlanType,
+      title: d.title,
+      start_time: d.start_time,
+      end_time: d.end_time,
+    }))
+    setCircuitEvents(mapped)
+  }, [])
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    await Promise.all([fetchAssets(), fetchCircuits(), fetchDowntimeEvents(), fetchCircuitEvents()])
+    setLoading(false)
+  }, [fetchAssets, fetchCircuits, fetchDowntimeEvents, fetchCircuitEvents])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  // ── Event helpers ──
+
   function getEventsForDay(date: Date) {
     const dateStr = format(date, 'yyyy-MM-dd')
     return events.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
@@ -230,7 +261,6 @@ export default function NetworkAvailabilityCalendar() {
 
   // ═══ Report 1: 設備類型彙總 (Image 3) ═══
   const deviceTypeReport = useMemo(() => {
-    // Group: 總局內網防火牆, 總局內網核心交換器, ... 總局外網..., 分局稽徵所防火牆, ...
     const hqZones: Array<{ zone: 'internal' | 'external'; label: string }> = [
       { zone: 'internal', label: '內網' },
       { zone: 'external', label: '外網' },
@@ -243,7 +273,7 @@ export default function NetworkAvailabilityCalendar() {
     // 總局 - 內外網各設備類型
     hqZones.forEach(({ zone, label: zoneLabel }) => {
       hqDeviceTypes.forEach((dt) => {
-        const matched = NETWORK_ASSETS.filter((a) => a.majorCategory === '總局' && a.zone === zone && a.deviceType === dt)
+        const matched = networkAssets.filter((a) => a.majorCategory === '總局' && a.zone === zone && a.deviceType === dt)
         if (matched.length > 0) {
           rows.push({ label: `總局${zoneLabel}${dt}`, stats: calcStats(matched, events, monthStart, monthEnd, hoursPerDevice) })
         }
@@ -252,20 +282,20 @@ export default function NetworkAvailabilityCalendar() {
 
     // 分局稽徵所 - 各設備類型（內外網合計）
     branchDeviceTypes.forEach((dt) => {
-      const matched = NETWORK_ASSETS.filter((a) => a.majorCategory === '分局稽徵所' && a.deviceType === dt)
+      const matched = networkAssets.filter((a) => a.majorCategory === '分局稽徵所' && a.deviceType === dt)
       if (matched.length > 0) {
         rows.push({ label: `分局稽徵所${dt}`, stats: calcStats(matched, events, monthStart, monthEnd, hoursPerDevice) })
       }
     })
 
     return rows
-  }, [currentMonth, events, hoursPerDevice, monthStart, monthEnd])
+  }, [currentMonth, events, hoursPerDevice, monthStart, monthEnd, networkAssets])
 
   // ═══ Report 2: 各單位設備明細 ═══
   const unitDetailReport = useMemo(() => {
-    const units = ['總局', 'a稽徵所', 'b分局', 'c稽徵所']
+    const units = UNITS
     return units.map((unit, idx) => {
-      const unitAssets = NETWORK_ASSETS.filter((a) => a.unit === unit)
+      const unitAssets = networkAssets.filter((a) => a.unit === unit)
       const deviceRows = unitAssets.map((asset) => {
         const assetEvents = events.filter((e) => e.asset_id === asset.id)
         let plannedMins = 0
@@ -291,13 +321,13 @@ export default function NetworkAvailabilityCalendar() {
       })
       return { unit, seq: idx + 1, devices: deviceRows }
     })
-  }, [currentMonth, events, hoursPerDevice, monthStart, monthEnd])
+  }, [currentMonth, events, hoursPerDevice, monthStart, monthEnd, networkAssets, UNITS])
 
   // ═══ Report 3: 各單位可用率彙總 — 依電路編號 ═══
   const circuitReport = useMemo(() => {
-    const units = ['總局', 'b分局', 'a稽徵所', 'c稽徵所']
-    return units.map((unit, idx) => {
-      const unitCircuits = DEMO_CIRCUITS.filter((c) => c.unit === unit)
+    const unitList = [...new Set(circuits.map(c => c.unit))]
+    return unitList.map((unit, idx) => {
+      const unitCircuits = circuits.filter((c) => c.unit === unit)
       const circuitRows = unitCircuits.map((circuit) => {
         const cEvents = circuitEvents.filter((e) => e.circuit_id === circuit.id)
         let plannedMins = 0
@@ -322,7 +352,7 @@ export default function NetworkAvailabilityCalendar() {
       })
       return { unit, seq: idx + 1, circuits: circuitRows }
     })
-  }, [currentMonth, circuitEvents, hoursPerDevice, monthStart, monthEnd])
+  }, [currentMonth, circuitEvents, hoursPerDevice, monthStart, monthEnd, circuits])
 
   function openNewEvent(date?: Date) {
     setFormSelectMode('unit')
@@ -338,14 +368,16 @@ export default function NetworkAvailabilityCalendar() {
     setShowModal(true)
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (formSelectedAssets.length === 0 || !formTitle || !formStart || !formEnd) return
-    const newEvents: DowntimeEvent[] = formSelectedAssets.map((assetId) => {
-      const asset = NETWORK_ASSETS.find((a) => a.id === assetId)
+    setSaving(true)
+    const rows = formSelectedAssets.map((assetId) => {
+      const asset = networkAssets.find((a) => a.id === assetId)
       return {
-        id: crypto.randomUUID(),
+        asset_type: 'network',
         asset_id: assetId,
         asset_name: asset?.name || '',
+        event_type: formEventType,
         plan_type: formPlanType,
         title: formTitle,
         description: formDesc,
@@ -353,14 +385,21 @@ export default function NetworkAvailabilityCalendar() {
         end_time: formEnd,
       }
     })
-    setEvents([...events, ...newEvents])
+    const { error } = await supabase.from('downtime_events').insert(rows)
+    if (error) {
+      console.error('Failed to save events:', error)
+      setSaving(false)
+      return
+    }
+    await fetchDowntimeEvents()
+    setSaving(false)
     setShowModal(false)
   }
 
   function handleUnitChange(unit: string) {
     setFormSelectedUnit(unit)
     if (unit) {
-      setFormSelectedAssets(NETWORK_ASSETS.filter((a) => a.unit === unit).map((a) => a.id))
+      setFormSelectedAssets(networkAssets.filter((a) => a.unit === unit).map((a) => a.id))
     } else {
       setFormSelectedAssets([])
     }
@@ -372,7 +411,14 @@ export default function NetworkAvailabilityCalendar() {
     )
   }
 
-  function deleteEvent(id: string) { setEvents(events.filter((e) => e.id !== id)) }
+  async function deleteEvent(id: string) {
+    const { error } = await supabase.from('downtime_events').delete().eq('id', id)
+    if (error) {
+      console.error('Failed to delete event:', error)
+      return
+    }
+    await fetchDowntimeEvents()
+  }
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
 
@@ -381,6 +427,16 @@ export default function NetworkAvailabilityCalendar() {
   // ROC date range for header
   const rocYear = currentMonth.getFullYear() - 1911
   const rocMonth = currentMonth.getMonth() + 1
+
+  // ── Loading state ──
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" />
+        <span className="ml-3 text-[var(--color-text-muted)]">載入資料中...</span>
+      </div>
+    )
+  }
 
   return (
     <div className="flex gap-6">
@@ -699,7 +755,7 @@ export default function NetworkAvailabilityCalendar() {
                       </tr>
                     ))}
                     {quarterCircuitEvents.map((e) => {
-                      const circuit = DEMO_CIRCUITS.find((c) => c.id === e.circuit_id)
+                      const circuit = circuits.find((c) => c.id === e.circuit_id)
                       return (
                         <tr key={`c-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                           <td className="px-4 py-3">
@@ -781,7 +837,7 @@ export default function NetworkAvailabilityCalendar() {
                 {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
               {formSelectedUnit && (() => {
-                const unitAssets = NETWORK_ASSETS.filter((a) => a.unit === formSelectedUnit)
+                const unitAssets = networkAssets.filter((a) => a.unit === formSelectedUnit)
                 const zones = [...new Set(unitAssets.map((a) => a.zone))] as Array<'internal' | 'external'>
                 return (
                   <div className="mt-2 border border-[var(--color-border)] rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
@@ -812,7 +868,7 @@ export default function NetworkAvailabilityCalendar() {
               <label className="block text-sm font-medium mb-1">設備 * (可多選)</label>
               <div className="border border-[var(--color-border)] rounded-lg p-3 max-h-64 overflow-y-auto space-y-3">
                 {UNITS.map((unit) => {
-                  const unitAssets = NETWORK_ASSETS.filter((a) => a.unit === unit)
+                  const unitAssets = networkAssets.filter((a) => a.unit === unit)
                   const zones = [...new Set(unitAssets.map((a) => a.zone))] as Array<'internal' | 'external'>
                   return (
                     <div key={unit}>
@@ -879,8 +935,9 @@ export default function NetworkAvailabilityCalendar() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">取消</button>
-            <button onClick={saveEvent} disabled={formSelectedAssets.length === 0}
-              className={`px-4 py-2 text-sm rounded-lg ${formSelectedAssets.length > 0 ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
+            <button onClick={saveEvent} disabled={formSelectedAssets.length === 0 || saving}
+              className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${formSelectedAssets.length > 0 && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
+              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               儲存{formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}
             </button>
           </div>
