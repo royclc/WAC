@@ -541,6 +541,7 @@ export default function NetworkAvailabilityCalendar() {
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止服務<br/>時間累計 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">非計畫性停止服務<br/>時間累計 (hrs)</th>
+                  <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">可用率</th>
                 </tr>
               </thead>
@@ -551,6 +552,7 @@ export default function NetworkAvailabilityCalendar() {
                     <td className="text-right px-4 py-3 font-mono text-xs">{hoursPerDevice}*{stats.count}</td>
                     <td className="text-right px-4 py-3 text-[var(--color-warning)]">{stats.plannedHours}</td>
                     <td className="text-right px-4 py-3 text-[var(--color-danger)]">{stats.unplannedHours}</td>
+                    <td className="text-right px-4 py-3 font-semibold">{Number((stats.plannedHours + stats.unplannedHours).toFixed(2))}</td>
                     <td className="text-right px-4 py-3">
                       <span className={`font-semibold ${stats.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : stats.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                         {stats.availabilityPct}%
@@ -581,6 +583,7 @@ export default function NetworkAvailabilityCalendar() {
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止<br/>服務時間 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">非計畫性停止<br/>服務時間 (hrs)</th>
+                  <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">可用率</th>
                 </tr>
               </thead>
@@ -606,6 +609,7 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="text-right px-4 py-2.5 font-mono text-xs">{d.asset.quantity > 1 ? `${hoursPerDevice}*${d.asset.quantity}` : hoursPerDevice}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">{d.plannedHours}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">{d.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 font-semibold">{Number((d.plannedHours + d.unplannedHours).toFixed(2))}</td>
                         <td className="text-right px-4 py-2.5">
                           <span className={`font-semibold ${d.pct >= 99.9 ? 'text-[var(--color-success)]' : d.pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {d.pct}%
@@ -638,6 +642,7 @@ export default function NetworkAvailabilityCalendar() {
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止<br/>服務時間<br/>累計 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">非計畫性停止<br/>服務時間<br/>累計 (hrs)</th>
+                  <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">可用率</th>
                 </tr>
               </thead>
@@ -658,6 +663,7 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="text-right px-4 py-2.5">{hoursPerDevice}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">{row.plannedHours}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">{row.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 font-semibold">{Number((row.plannedHours + row.unplannedHours).toFixed(2))}</td>
                         <td className="text-right px-4 py-2.5">
                           <span className={`font-semibold ${row.pct >= 99.9 ? 'text-[var(--color-success)]' : row.pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {row.pct}%

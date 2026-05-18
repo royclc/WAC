@@ -506,7 +506,6 @@ export default function OrganizationsPage() {
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
                                 <span className="text-xs font-mono text-[var(--color-badge-blue-text)]">x{d.quantity || 1}</span>
-                                <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
                               <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                 <Trash2 className="w-3 h-3" />
@@ -528,7 +527,6 @@ export default function OrganizationsPage() {
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
                                 <span className="text-xs font-mono text-[var(--color-warning)]">x{d.quantity || 1}</span>
-                                <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
                               <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                 <Trash2 className="w-3 h-3" />
