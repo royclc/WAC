@@ -891,7 +891,7 @@ export default function NetworkAvailabilityCalendar() {
                           </div>
                         </div>
                         <div className="font-medium text-sm mt-1">{first.title}</div>
-                        <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.start_time.replace('T', ' ')} ~ {first.end_time.replace('T', ' ')}</div>
+                        <div className="text-xs text-[var(--color-text-muted)] mt-1">{format(new Date(first.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(first.end_time), 'yyyy/MM/dd HH:mm')}</div>
                         {first.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.description}</div>}
                       </div>
                     </div>

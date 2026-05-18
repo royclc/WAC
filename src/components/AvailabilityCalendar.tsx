@@ -541,7 +541,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   <div className="font-medium text-sm mt-1">{e.title}</div>
                   <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
                   <div className="text-xs text-[var(--color-text-muted)]">
-                    {e.start_time.replace('T', ' ')} ~ {e.end_time.replace('T', ' ')}
+                    {format(new Date(e.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(e.end_time), 'yyyy/MM/dd HH:mm')}
                   </div>
                   {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
                 </div>
