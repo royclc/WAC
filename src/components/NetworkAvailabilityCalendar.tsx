@@ -142,8 +142,9 @@ export default function NetworkAvailabilityCalendar() {
   const [editingIds, setEditingIds] = useState<string[]>([])  // batch edit: device event IDs
   const [editingCircuitIds, setEditingCircuitIds] = useState<string[]>([])  // batch edit: circuit event IDs
   const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device' | 'circuit'>('unit')
-  const [expandCircuits, setExpandCircuits] = useState(true)
-  const [expandDevices, setExpandDevices] = useState(true)
+  const [expandCircuits, setExpandCircuits] = useState(true)   // unit mode: circuits section
+  const [expandDevices, setExpandDevices] = useState(true)     // unit mode: devices section
+  const [collapsedUnits, setCollapsedUnits] = useState<Set<string>>(new Set())  // device/circuit mode: per-unit collapse
   const [formSelectedUnit, setFormSelectedUnit] = useState('')
   const [formSelectedAssets, setFormSelectedAssets] = useState<string[]>([])
   const [formSelectedCircuits, setFormSelectedCircuits] = useState<string[]>([])  // selected circuit IDs
@@ -949,7 +950,7 @@ export default function NetworkAvailabilityCalendar() {
             <label className="block text-sm font-medium mb-1">選擇方式</label>
             <div className="flex gap-2">
               {([['unit', '依單位'], ['device', '依設備'], ['circuit', '依線路']] as const).map(([k, v]) => (
-                <button key={k} onClick={() => { setFormSelectMode(k); setFormSelectedUnit(''); setFormSelectedAssets([]); setFormSelectedCircuits([]); setExpandCircuits(true); setExpandDevices(true) }}
+                <button key={k} onClick={() => { setFormSelectMode(k); setFormSelectedUnit(''); setFormSelectedAssets([]); setFormSelectedCircuits([]); setExpandCircuits(true); setExpandDevices(true); setCollapsedUnits(new Set()) }}
                   className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formSelectMode === k ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
                   {v}
                 </button>
@@ -1024,64 +1025,74 @@ export default function NetworkAvailabilityCalendar() {
           {/* ═══ 依設備模式 ═══ */}
           {formSelectMode === 'device' && (
             <div>
-              <button type="button" onClick={() => setExpandDevices(!expandDevices)}
-                className="flex items-center gap-1 text-sm font-medium mb-1">
-                {expandDevices ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                設備 (已選 {formSelectedAssets.length})
-              </button>
-              {expandDevices && (
-                <div className="border border-[var(--color-border)] rounded-lg p-3 max-h-64 overflow-y-auto space-y-3">
-                  {UNITS.map((unit) => {
-                    const unitAssets = networkAssets.filter((a) => a.unit === unit)
-                    const zones = [...new Set(unitAssets.map((a) => a.zone))] as Array<'internal' | 'external'>
-                    return (
-                      <div key={unit}>
-                        <div className="text-sm font-semibold mb-1">{unit}</div>
-                        {zones.map((zone) => (
-                          <div key={zone} className="ml-2 mb-1">
-                            <div className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{ZONE_LABELS[zone]}</div>
-                            {unitAssets.filter((a) => a.zone === zone).map((a) => (
-                              <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-2">
-                                <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)} className="rounded border-gray-300" />
-                                <span>{a.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              <div className="text-sm font-medium mb-1">設備 (已選 {formSelectedAssets.length})</div>
+              <div className="border border-[var(--color-border)] rounded-lg max-h-64 overflow-y-auto">
+                {UNITS.map((unit) => {
+                  const unitAssets = networkAssets.filter((a) => a.unit === unit)
+                  const zones = [...new Set(unitAssets.map((a) => a.zone))] as Array<'internal' | 'external'>
+                  const isOpen = !collapsedUnits.has(`d-${unit}`)
+                  const selectedCount = unitAssets.filter((a) => formSelectedAssets.includes(a.id)).length
+                  return (
+                    <div key={unit} className="border-b border-[var(--color-border)] last:border-b-0">
+                      <button type="button" onClick={() => setCollapsedUnits(prev => { const s = new Set(prev); s.has(`d-${unit}`) ? s.delete(`d-${unit}`) : s.add(`d-${unit}`); return s })}
+                        className="w-full flex items-center gap-1 px-3 py-2 text-sm font-semibold hover:bg-[var(--color-hover)] transition-colors">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {unit}
+                        <span className="text-xs font-normal text-[var(--color-text-muted)] ml-auto">{selectedCount}/{unitAssets.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-3 pb-2 space-y-1">
+                          {zones.map((zone) => (
+                            <div key={zone}>
+                              <div className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5 ml-1">{ZONE_LABELS[zone]}</div>
+                              {unitAssets.filter((a) => a.zone === zone).map((a) => (
+                                <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-1">
+                                  <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)} className="rounded border-gray-300" />
+                                  <span>{a.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
           {/* ═══ 依線路模式 ═══ */}
           {formSelectMode === 'circuit' && (
             <div>
-              <button type="button" onClick={() => setExpandCircuits(!expandCircuits)}
-                className="flex items-center gap-1 text-sm font-medium mb-1">
-                {expandCircuits ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                線路 (已選 {formSelectedCircuits.length})
-              </button>
-              {expandCircuits && (
-                <div className="border border-[var(--color-border)] rounded-lg p-3 max-h-64 overflow-y-auto space-y-3">
-                  {[...new Set(circuits.map((c) => c.unit))].map((unit) => {
-                    const unitCircs = circuits.filter((c) => c.unit === unit)
-                    return (
-                      <div key={unit}>
-                        <div className="text-sm font-semibold mb-1">{unit}</div>
-                        {unitCircs.map((c) => (
-                          <label key={c.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-2">
-                            <input type="checkbox" checked={formSelectedCircuits.includes(c.id)} onChange={() => toggleCircuit(c.id)} className="rounded border-gray-300" />
-                            <span>{c.circuit_number}{c.bandwidth ? ` (${c.bandwidth})` : ''}{c.ip_address ? ` — ${c.ip_address}` : ''}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              <div className="text-sm font-medium mb-1">線路 (已選 {formSelectedCircuits.length})</div>
+              <div className="border border-[var(--color-border)] rounded-lg max-h-64 overflow-y-auto">
+                {[...new Set(circuits.map((c) => c.unit))].map((unit) => {
+                  const unitCircs = circuits.filter((c) => c.unit === unit)
+                  const isOpen = !collapsedUnits.has(`c-${unit}`)
+                  const selectedCount = unitCircs.filter((c) => formSelectedCircuits.includes(c.id)).length
+                  return (
+                    <div key={unit} className="border-b border-[var(--color-border)] last:border-b-0">
+                      <button type="button" onClick={() => setCollapsedUnits(prev => { const s = new Set(prev); s.has(`c-${unit}`) ? s.delete(`c-${unit}`) : s.add(`c-${unit}`); return s })}
+                        className="w-full flex items-center gap-1 px-3 py-2 text-sm font-semibold hover:bg-[var(--color-hover)] transition-colors">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {unit}
+                        <span className="text-xs font-normal text-[var(--color-text-muted)] ml-auto">{selectedCount}/{unitCircs.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-3 pb-2 space-y-0.5">
+                          {unitCircs.map((c) => (
+                            <label key={c.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-1">
+                              <input type="checkbox" checked={formSelectedCircuits.includes(c.id)} onChange={() => toggleCircuit(c.id)} className="rounded border-gray-300" />
+                              <span>{c.circuit_number}{c.bandwidth ? ` (${c.bandwidth})` : ''}{c.ip_address ? ` — ${c.ip_address}` : ''}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
