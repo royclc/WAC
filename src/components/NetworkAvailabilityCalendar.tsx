@@ -139,10 +139,12 @@ export default function NetworkAvailabilityCalendar() {
   const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
   const [circuits, setCircuits] = useState<Circuit[]>([])
 
-  const [editingIds, setEditingIds] = useState<string[]>([])  // batch edit: all event IDs in the group
+  const [editingIds, setEditingIds] = useState<string[]>([])  // batch edit: device event IDs
+  const [editingCircuitIds, setEditingCircuitIds] = useState<string[]>([])  // batch edit: circuit event IDs
   const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device'>('unit')
   const [formSelectedUnit, setFormSelectedUnit] = useState('')
   const [formSelectedAssets, setFormSelectedAssets] = useState<string[]>([])
+  const [formSelectedCircuits, setFormSelectedCircuits] = useState<string[]>([])  // selected circuit IDs
   const [formEventType, setFormEventType] = useState('設備維護')
   const [formPlanType, setFormPlanType] = useState<EventPlanType>('unplanned')
   const [formTitle, setFormTitle] = useState('')
@@ -357,9 +359,11 @@ export default function NetworkAvailabilityCalendar() {
 
   function openNewEvent(date?: Date) {
     setEditingIds([])
+    setEditingCircuitIds([])
     setFormSelectMode('unit')
     setFormSelectedUnit('')
     setFormSelectedAssets([])
+    setFormSelectedCircuits([])
     setFormEventType('設備維護')
     setFormPlanType('unplanned')
     setFormTitle('')
@@ -371,82 +375,92 @@ export default function NetworkAvailabilityCalendar() {
   }
 
   // Open edit for a group of events (same unit + same event signature)
-  function openEditEventGroup(groupEvents: DowntimeEvent[], unitName: string) {
-    setEditingIds(groupEvents.map((e) => e.id))
-    const first = groupEvents[0]
+  function openEditEventGroup(deviceEvts: DowntimeEvent[], circuitEvts: CircuitEvent[], unitName: string) {
+    setEditingIds(deviceEvts.map((e) => e.id))
+    setEditingCircuitIds(circuitEvts.map((e) => e.id))
+    const first: DowntimeEvent | CircuitEvent | undefined = deviceEvts[0] || circuitEvts[0]
+    if (!first) return
     setFormSelectMode('unit')
     setFormSelectedUnit(unitName)
-    setFormSelectedAssets(groupEvents.map((e) => e.asset_id))
+    setFormSelectedAssets(deviceEvts.map((e) => e.asset_id))
+    setFormSelectedCircuits(circuitEvts.map((e) => e.circuit_id))
     setFormEventType(first.title)
     setFormPlanType(first.plan_type)
     setFormTitle(first.title)
-    setFormDesc(first.description)
+    setFormDesc('description' in first ? first.description : '')
     setFormStart(first.start_time.includes('T') ? first.start_time.slice(0, 16) : first.start_time)
     setFormEnd(first.end_time.includes('T') ? first.end_time.slice(0, 16) : first.end_time)
     setShowModal(true)
   }
 
   async function saveEvent() {
-    if (formSelectedAssets.length === 0 || !formTitle || !formStart || !formEnd) return
+    const hasAssets = formSelectedAssets.length > 0
+    const hasCircuits = formSelectedCircuits.length > 0
+    if (!hasAssets && !hasCircuits) return
+    if (!formTitle || !formStart || !formEnd) return
     setSaving(true)
 
-    if (editingIds.length > 0) {
-      // Batch edit: delete old events, insert new ones for selected assets
-      const { error: delErr } = await supabase.from('downtime_events').delete().in('id', editingIds)
-      if (delErr) { console.error('Failed to delete old events:', delErr); setSaving(false); return }
-      const rows = formSelectedAssets.map((assetId) => {
-        const asset = networkAssets.find((a) => a.id === assetId)
-        return {
-          asset_type: 'network',
-          asset_id: assetId,
-          asset_name: asset?.name || '',
-          event_type: formEventType,
-          plan_type: formPlanType,
-          title: formTitle,
-          description: formDesc,
-          start_time: formStart,
-          end_time: formEnd,
-        }
-      })
-      const { error } = await supabase.from('downtime_events').insert(rows)
-      if (error) { console.error('Failed to save events:', error); setSaving(false); return }
-    } else {
-      // Insert new events
-      const rows = formSelectedAssets.map((assetId) => {
-        const asset = networkAssets.find((a) => a.id === assetId)
-        return {
-          asset_type: 'network',
-          asset_id: assetId,
-          asset_name: asset?.name || '',
-          event_type: formEventType,
-          plan_type: formPlanType,
-          title: formTitle,
-          description: formDesc,
-          start_time: formStart,
-          end_time: formEnd,
-        }
-      })
-      const { error } = await supabase.from('downtime_events').insert(rows)
-      if (error) { console.error('Failed to save events:', error); setSaving(false); return }
+    const isEditing = editingIds.length > 0 || editingCircuitIds.length > 0
+
+    if (isEditing) {
+      if (editingIds.length > 0) {
+        const { error } = await supabase.from('downtime_events').delete().in('id', editingIds)
+        if (error) { console.error(error); setSaving(false); return }
+      }
+      if (editingCircuitIds.length > 0) {
+        const { error } = await supabase.from('circuit_events').delete().in('id', editingCircuitIds)
+        if (error) { console.error(error); setSaving(false); return }
+      }
     }
-    await fetchDowntimeEvents()
+
+    if (hasAssets) {
+      const rows = formSelectedAssets.map((assetId) => {
+        const asset = networkAssets.find((a) => a.id === assetId)
+        return {
+          asset_type: 'network', asset_id: assetId, asset_name: asset?.name || '',
+          event_type: formEventType, plan_type: formPlanType,
+          title: formTitle, description: formDesc, start_time: formStart, end_time: formEnd,
+        }
+      })
+      const { error } = await supabase.from('downtime_events').insert(rows)
+      if (error) { console.error(error); setSaving(false); return }
+    }
+
+    if (hasCircuits) {
+      const cRows = formSelectedCircuits.map((cid) => ({
+        circuit_id: cid, plan_type: formPlanType,
+        title: formTitle, description: formDesc, start_time: formStart, end_time: formEnd,
+      }))
+      const { error } = await supabase.from('circuit_events').insert(cRows)
+      if (error) { console.error(error); setSaving(false); return }
+    }
+
+    await Promise.all([fetchDowntimeEvents(), fetchCircuitEvents()])
     setSaving(false)
     setShowModal(false)
   }
 
-  // Delete a group of events by IDs
-  async function deleteEventGroup(ids: string[]) {
-    const { error } = await supabase.from('downtime_events').delete().in('id', ids)
-    if (error) { console.error('Failed to delete events:', error); return }
-    await fetchDowntimeEvents()
+  // Delete a group of device + circuit events
+  async function deleteEventGroup(deviceIds: string[], circuitIds: string[]) {
+    if (deviceIds.length > 0) {
+      const { error } = await supabase.from('downtime_events').delete().in('id', deviceIds)
+      if (error) { console.error(error); return }
+    }
+    if (circuitIds.length > 0) {
+      const { error } = await supabase.from('circuit_events').delete().in('id', circuitIds)
+      if (error) { console.error(error); return }
+    }
+    await Promise.all([fetchDowntimeEvents(), fetchCircuitEvents()])
   }
 
   function handleUnitChange(unit: string) {
     setFormSelectedUnit(unit)
     if (unit) {
       setFormSelectedAssets(networkAssets.filter((a) => a.unit === unit).map((a) => a.id))
+      setFormSelectedCircuits(circuits.filter((c) => c.unit === unit).map((c) => c.id))
     } else {
       setFormSelectedAssets([])
+      setFormSelectedCircuits([])
     }
   }
 
@@ -456,12 +470,17 @@ export default function NetworkAvailabilityCalendar() {
     )
   }
 
-  // Single delete kept for backward compat (unused in sidebar now)
-  async function deleteEvent(id: string) {
-    await deleteEventGroup([id])
+  function toggleCircuit(id: string) {
+    setFormSelectedCircuits((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
   }
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
+  const selectedDayCircuitEvents = selectedDate ? (() => {
+    const dateStr = format(selectedDate, 'yyyy-MM-dd')
+    return circuitEvents.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
+  })() : []
 
   const monthTitle = formatMonthTitle(currentMonth)
 
@@ -854,7 +873,7 @@ export default function NetworkAvailabilityCalendar() {
       {selectedDate && (
         <div className="w-80 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 h-fit sticky top-6">
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
-          {selectedDayEvents.length === 0 ? (
+          {selectedDayEvents.length === 0 && selectedDayCircuitEvents.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-[var(--color-success)]">
               <CheckCircle className="w-4 h-4" /> 當日無事件
             </div>
@@ -862,23 +881,37 @@ export default function NetworkAvailabilityCalendar() {
             <div className="space-y-3">
               {(() => {
                 // Group by unit + event signature (title + start + end + plan_type)
-                interface UnitEventGroup { unit: string; events: DowntimeEvent[]; key: string }
+                interface UnitEventGroup { unit: string; deviceEvents: DowntimeEvent[]; circuitEvts: CircuitEvent[]; key: string }
                 const groupMap = new Map<string, UnitEventGroup>()
+
                 selectedDayEvents.forEach((e) => {
                   const asset = networkAssets.find((a) => a.id === e.asset_id)
                   const unitName = asset?.unit || '未知'
                   const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
-                  if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, events: [], key: sig })
-                  groupMap.get(sig)!.events.push(e)
+                  if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, deviceEvents: [], circuitEvts: [], key: sig })
+                  groupMap.get(sig)!.deviceEvents.push(e)
                 })
-                return [...groupMap.values()].map(({ unit, events: grpEvents, key }) => {
-                  const first = grpEvents[0]
-                  const ids = grpEvents.map((e) => e.id)
+
+                selectedDayCircuitEvents.forEach((e) => {
+                  const circuit = circuits.find((c) => c.id === e.circuit_id)
+                  const unitName = circuit?.unit || '未知'
+                  const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+                  if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, deviceEvents: [], circuitEvts: [], key: sig })
+                  groupMap.get(sig)!.circuitEvts.push(e)
+                })
+
+                return [...groupMap.values()].map(({ unit, deviceEvents: devEvts, circuitEvts: cirEvts, key }) => {
+                  const first: DowntimeEvent | CircuitEvent = devEvts[0] || cirEvts[0]
+                  const deviceIds = devEvts.map((e) => e.id)
+                  const circuitIds = cirEvts.map((e) => e.id)
+                  const countParts: string[] = []
+                  if (devEvts.length > 0) countParts.push(`${devEvts.length} 台設備`)
+                  if (cirEvts.length > 0) countParts.push(`${cirEvts.length} 條線路`)
                   return (
                     <div key={key} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
                       <div className="px-3 py-2 bg-[var(--color-table-header)] flex items-center justify-between">
                         <span className="text-sm font-semibold">{unit}</span>
-                        <span className="text-xs text-[var(--color-text-muted)]">{grpEvents.length} 台設備</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">{countParts.join('、')}</span>
                       </div>
                       <div className="px-3 py-2">
                         <div className="flex items-center justify-between mb-1">
@@ -886,13 +919,13 @@ export default function NetworkAvailabilityCalendar() {
                             {PLAN_TYPE_LABELS[first.plan_type]}
                           </span>
                           <div className="flex gap-2">
-                            <button onClick={() => openEditEventGroup(grpEvents, unit)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
-                            <button onClick={() => deleteEventGroup(ids)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
+                            <button onClick={() => openEditEventGroup(devEvts, cirEvts, unit)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
+                            <button onClick={() => deleteEventGroup(deviceIds, circuitIds)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
                           </div>
                         </div>
                         <div className="font-medium text-sm mt-1">{first.title}</div>
                         <div className="text-xs text-[var(--color-text-muted)] mt-1">{format(new Date(first.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(first.end_time), 'yyyy/MM/dd HH:mm')}</div>
-                        {first.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.description}</div>}
+                        {'description' in first && first.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.description}</div>}
                       </div>
                     </div>
                   )
@@ -946,8 +979,25 @@ export default function NetworkAvailabilityCalendar() {
                         ))}
                       </div>
                     ))}
+                    {/* 線路 */}
+                    {(() => {
+                      const unitCircuits = circuits.filter((c) => c.unit === formSelectedUnit)
+                      if (unitCircuits.length === 0) return null
+                      return (
+                        <div className="pt-2 border-t border-[var(--color-border)]">
+                          <div className="text-xs font-medium text-[var(--color-text-muted)] mb-1">線路</div>
+                          {unitCircuits.map((c) => (
+                            <label key={c.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1">
+                              <input type="checkbox" checked={formSelectedCircuits.includes(c.id)} onChange={() => toggleCircuit(c.id)}
+                                className="rounded border-gray-300" />
+                              <span>{c.circuit_number}{c.bandwidth ? ` (${c.bandwidth})` : ''}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    })()}
                     <div className="text-xs text-[var(--color-text-muted)] pt-1">
-                      已選 {formSelectedAssets.length} 項設備
+                      已選 {formSelectedAssets.length} 項設備、{formSelectedCircuits.length} 條線路
                     </div>
                   </div>
                 )
@@ -1028,10 +1078,10 @@ export default function NetworkAvailabilityCalendar() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">取消</button>
-            <button onClick={saveEvent} disabled={formSelectedAssets.length === 0 || saving}
-              className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${formSelectedAssets.length > 0 && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
+            <button onClick={saveEvent} disabled={(formSelectedAssets.length === 0 && formSelectedCircuits.length === 0) || saving}
+              className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${(formSelectedAssets.length > 0 || formSelectedCircuits.length > 0) && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              {editingIds.length > 0 ? '更新' : `儲存${formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}`}
+              {editingIds.length > 0 || editingCircuitIds.length > 0 ? '更新' : `儲存${(formSelectedAssets.length + formSelectedCircuits.length) > 1 ? ` (${formSelectedAssets.length + formSelectedCircuits.length} 筆)` : ''}`}
             </button>
           </div>
         </div>
