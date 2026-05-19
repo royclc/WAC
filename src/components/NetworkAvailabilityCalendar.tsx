@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import Modal from './Modal'
 import YearMonthPicker from './YearMonthPicker'
 import { supabase } from '@/lib/supabase'
@@ -139,9 +139,15 @@ export default function NetworkAvailabilityCalendar() {
   const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
   const [circuits, setCircuits] = useState<Circuit[]>([])
 
-  const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device'>('unit')
+  const [editingIds, setEditingIds] = useState<string[]>([])  // batch edit: device event IDs
+  const [editingCircuitIds, setEditingCircuitIds] = useState<string[]>([])  // batch edit: circuit event IDs
+  const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device' | 'circuit'>('unit')
+  const [expandCircuits, setExpandCircuits] = useState(true)   // unit mode: circuits section
+  const [expandDevices, setExpandDevices] = useState(true)     // unit mode: devices section
+  const [collapsedUnits, setCollapsedUnits] = useState<Set<string>>(new Set())  // device/circuit mode: per-unit collapse
   const [formSelectedUnit, setFormSelectedUnit] = useState('')
   const [formSelectedAssets, setFormSelectedAssets] = useState<string[]>([])
+  const [formSelectedCircuits, setFormSelectedCircuits] = useState<string[]>([])  // selected circuit IDs
   const [formEventType, setFormEventType] = useState('設備維護')
   const [formPlanType, setFormPlanType] = useState<EventPlanType>('unplanned')
   const [formTitle, setFormTitle] = useState('')
@@ -259,6 +265,11 @@ export default function NetworkAvailabilityCalendar() {
     return events.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
   }
 
+  function getCircuitEventsForDay(date: Date) {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    return circuitEvents.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
+  }
+
   // ═══ Report 1: 設備類型彙總 (Image 3) ═══
   const deviceTypeReport = useMemo(() => {
     const hqZones: Array<{ zone: 'internal' | 'external'; label: string }> = [
@@ -355,9 +366,14 @@ export default function NetworkAvailabilityCalendar() {
   }, [currentMonth, circuitEvents, hoursPerDevice, monthStart, monthEnd, circuits])
 
   function openNewEvent(date?: Date) {
+    setEditingIds([])
+    setEditingCircuitIds([])
     setFormSelectMode('unit')
     setFormSelectedUnit('')
     setFormSelectedAssets([])
+    setFormSelectedCircuits([])
+    setExpandCircuits(true)
+    setExpandDevices(true)
     setFormEventType('設備維護')
     setFormPlanType('unplanned')
     setFormTitle('')
@@ -368,40 +384,94 @@ export default function NetworkAvailabilityCalendar() {
     setShowModal(true)
   }
 
+  // Open edit for a group of events (same unit + same event signature)
+  function openEditEventGroup(deviceEvts: DowntimeEvent[], circuitEvts: CircuitEvent[], unitName: string) {
+    setEditingIds(deviceEvts.map((e) => e.id))
+    setEditingCircuitIds(circuitEvts.map((e) => e.id))
+    const first: DowntimeEvent | CircuitEvent | undefined = deviceEvts[0] || circuitEvts[0]
+    if (!first) return
+    setFormSelectMode('unit')
+    setFormSelectedUnit(unitName)
+    setFormSelectedAssets(deviceEvts.map((e) => e.asset_id))
+    setFormSelectedCircuits(circuitEvts.map((e) => e.circuit_id))
+    setFormEventType(first.title)
+    setFormPlanType(first.plan_type)
+    setFormTitle(first.title)
+    setFormDesc('description' in first ? first.description : '')
+    setFormStart(first.start_time.includes('T') ? first.start_time.slice(0, 16) : first.start_time)
+    setFormEnd(first.end_time.includes('T') ? first.end_time.slice(0, 16) : first.end_time)
+    setShowModal(true)
+  }
+
   async function saveEvent() {
-    if (formSelectedAssets.length === 0 || !formTitle || !formStart || !formEnd) return
+    const hasAssets = formSelectedAssets.length > 0
+    const hasCircuits = formSelectedCircuits.length > 0
+    if (!hasAssets && !hasCircuits) return
+    if (!formTitle || !formStart || !formEnd) return
     setSaving(true)
-    const rows = formSelectedAssets.map((assetId) => {
-      const asset = networkAssets.find((a) => a.id === assetId)
-      return {
-        asset_type: 'network',
-        asset_id: assetId,
-        asset_name: asset?.name || '',
-        event_type: formEventType,
-        plan_type: formPlanType,
-        title: formTitle,
-        description: formDesc,
-        start_time: formStart,
-        end_time: formEnd,
+
+    const isEditing = editingIds.length > 0 || editingCircuitIds.length > 0
+
+    if (isEditing) {
+      if (editingIds.length > 0) {
+        const { error } = await supabase.from('downtime_events').delete().in('id', editingIds)
+        if (error) { console.error(error); setSaving(false); return }
       }
-    })
-    const { error } = await supabase.from('downtime_events').insert(rows)
-    if (error) {
-      console.error('Failed to save events:', error)
-      setSaving(false)
-      return
+      if (editingCircuitIds.length > 0) {
+        const { error } = await supabase.from('circuit_events').delete().in('id', editingCircuitIds)
+        if (error) { console.error(error); setSaving(false); return }
+      }
     }
-    await fetchDowntimeEvents()
+
+    if (hasAssets) {
+      const rows = formSelectedAssets.map((assetId) => {
+        const asset = networkAssets.find((a) => a.id === assetId)
+        return {
+          asset_type: 'network', asset_id: assetId, asset_name: asset?.name || '',
+          event_type: formEventType, plan_type: formPlanType,
+          title: formTitle, description: formDesc, start_time: formStart, end_time: formEnd,
+        }
+      })
+      const { error } = await supabase.from('downtime_events').insert(rows)
+      if (error) { console.error(error); setSaving(false); return }
+    }
+
+    if (hasCircuits) {
+      const cRows = formSelectedCircuits.map((cid) => ({
+        circuit_id: cid, plan_type: formPlanType,
+        title: formTitle, description: formDesc, start_time: formStart, end_time: formEnd,
+      }))
+      const { error } = await supabase.from('circuit_events').insert(cRows)
+      if (error) { console.error(error); setSaving(false); return }
+    }
+
+    await Promise.all([fetchDowntimeEvents(), fetchCircuitEvents()])
     setSaving(false)
     setShowModal(false)
+  }
+
+  // Delete a group of device + circuit events
+  async function deleteEventGroup(deviceIds: string[], circuitIds: string[]) {
+    if (deviceIds.length > 0) {
+      const { error } = await supabase.from('downtime_events').delete().in('id', deviceIds)
+      if (error) { console.error(error); return }
+    }
+    if (circuitIds.length > 0) {
+      const { error } = await supabase.from('circuit_events').delete().in('id', circuitIds)
+      if (error) { console.error(error); return }
+    }
+    await Promise.all([fetchDowntimeEvents(), fetchCircuitEvents()])
+    setSelectedDate(null)
   }
 
   function handleUnitChange(unit: string) {
     setFormSelectedUnit(unit)
     if (unit) {
       setFormSelectedAssets(networkAssets.filter((a) => a.unit === unit).map((a) => a.id))
+      setFormSelectedCircuits(circuits.filter((c) => c.unit === unit).map((c) => c.id))
     } else {
       setFormSelectedAssets([])
+      setFormSelectedCircuits([])
     }
   }
 
@@ -411,16 +481,17 @@ export default function NetworkAvailabilityCalendar() {
     )
   }
 
-  async function deleteEvent(id: string) {
-    const { error } = await supabase.from('downtime_events').delete().eq('id', id)
-    if (error) {
-      console.error('Failed to delete event:', error)
-      return
-    }
-    await fetchDowntimeEvents()
+  function toggleCircuit(id: string) {
+    setFormSelectedCircuits((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
   }
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
+  const selectedDayCircuitEvents = selectedDate ? (() => {
+    const dateStr = format(selectedDate, 'yyyy-MM-dd')
+    return circuitEvents.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
+  })() : []
 
   const monthTitle = formatMonthTitle(currentMonth)
 
@@ -471,23 +542,46 @@ export default function NetworkAvailabilityCalendar() {
           <div className="grid grid-cols-7">
             {days.map((date, idx) => {
               const dayEvents = getEventsForDay(date)
+              const dayCircuitEvts = getCircuitEventsForDay(date)
               const inMonth = isSameMonth(date, currentMonth)
               const today = isToday(date)
               const selected = selectedDate && isSameDay(date, selectedDate)
-              const hasUnplanned = dayEvents.some((e) => e.plan_type === 'unplanned')
+              const hasUnplanned = dayEvents.some((e) => e.plan_type === 'unplanned') || dayCircuitEvts.some((e) => e.plan_type === 'unplanned')
+              const hasAnyEvent = dayEvents.length > 0 || dayCircuitEvts.length > 0
               const dow = date.getDay()
               return (
-                <div key={idx} onClick={() => setSelectedDate(date)}
-                  className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-[var(--color-day-outside)]' : hasUnplanned ? 'bg-[var(--color-danger-dim)]' : dayEvents.length > 0 ? 'bg-[var(--color-warning-dim)]' : 'hover:bg-[var(--color-table-row-hover)]'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
+                <div key={idx} onClick={() => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
+                  className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-[var(--color-day-outside)]' : hasUnplanned ? 'bg-[var(--color-danger-dim)]' : hasAnyEvent ? 'bg-[var(--color-warning-dim)]' : 'hover:bg-[var(--color-table-row-hover)]'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${dow === 0 ? 'text-[var(--color-weekend-sun)]' : dow === 6 ? 'text-[var(--color-weekend-sat)]' : ''}`}>{format(date, 'd')}</span>
-                    {dayEvents.length > 0 && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-weekend-sun)]' : 'text-[var(--color-warning)]'}`} />}
+                    {hasAnyEvent && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-weekend-sun)]' : 'text-[var(--color-warning)]'}`} />}
                   </div>
                   <div className="space-y-0.5">
-                    {dayEvents.slice(0, 2).map((e) => (
-                      <div key={e.id} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>{e.asset_name}</div>
-                    ))}
-                    {dayEvents.length > 2 && <div className="text-xs text-[var(--color-text-muted)] px-1">+{dayEvents.length - 2}</div>}
+                    {(() => {
+                      // 以單位為主顯示，合併設備事件與線路事件
+                      const unitMap = new Map<string, EventPlanType>()
+                      dayEvents.forEach((e) => {
+                        const asset = networkAssets.find((a) => a.id === e.asset_id)
+                        const unitName = asset?.unit || '未知'
+                        const existing = unitMap.get(unitName)
+                        if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
+                      })
+                      dayCircuitEvts.forEach((e) => {
+                        const circuit = circuits.find((c) => c.id === e.circuit_id)
+                        const unitName = circuit?.unit || '未知'
+                        const existing = unitMap.get(unitName)
+                        if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
+                      })
+                      const unitEntries = [...unitMap.entries()]
+                      return (
+                        <>
+                          {unitEntries.slice(0, 2).map(([unit, planType]) => (
+                            <div key={unit} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[planType] }}>{unit}</div>
+                          ))}
+                          {unitEntries.length > 2 && <div className="text-xs text-[var(--color-text-muted)] px-1">+{unitEntries.length - 2}</div>}
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
               )
@@ -526,6 +620,7 @@ export default function NetworkAvailabilityCalendar() {
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止服務<br/>時間累計 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">非計畫性停止服務<br/>時間累計 (hrs)</th>
+                  <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">可用率</th>
                 </tr>
               </thead>
@@ -536,6 +631,7 @@ export default function NetworkAvailabilityCalendar() {
                     <td className="text-right px-4 py-3 font-mono text-xs">{hoursPerDevice}*{stats.count}</td>
                     <td className="text-right px-4 py-3 text-[var(--color-warning)]">{stats.plannedHours}</td>
                     <td className="text-right px-4 py-3 text-[var(--color-danger)]">{stats.unplannedHours}</td>
+                    <td className="text-right px-4 py-3 font-semibold">{Number((stats.plannedHours + stats.unplannedHours).toFixed(2))}</td>
                     <td className="text-right px-4 py-3">
                       <span className={`font-semibold ${stats.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : stats.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                         {stats.availabilityPct}%
@@ -566,6 +662,7 @@ export default function NetworkAvailabilityCalendar() {
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止<br/>服務時間 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">非計畫性停止<br/>服務時間 (hrs)</th>
+                  <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">可用率</th>
                 </tr>
               </thead>
@@ -591,6 +688,7 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="text-right px-4 py-2.5 font-mono text-xs">{d.asset.quantity > 1 ? `${hoursPerDevice}*${d.asset.quantity}` : hoursPerDevice}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">{d.plannedHours}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">{d.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 font-semibold">{Number((d.plannedHours + d.unplannedHours).toFixed(2))}</td>
                         <td className="text-right px-4 py-2.5">
                           <span className={`font-semibold ${d.pct >= 99.9 ? 'text-[var(--color-success)]' : d.pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {d.pct}%
@@ -623,6 +721,7 @@ export default function NetworkAvailabilityCalendar() {
                   <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">計畫性停止<br/>服務時間<br/>累計 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">非計畫性停止<br/>服務時間<br/>累計 (hrs)</th>
+                  <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                   <th className="text-right px-4 py-3 font-medium">可用率</th>
                 </tr>
               </thead>
@@ -643,6 +742,7 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="text-right px-4 py-2.5">{hoursPerDevice}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">{row.plannedHours}</td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">{row.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 font-semibold">{Number((row.plannedHours + row.unplannedHours).toFixed(2))}</td>
                         <td className="text-right px-4 py-2.5">
                           <span className={`font-semibold ${row.pct >= 99.9 ? 'text-[var(--color-success)]' : row.pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {row.pct}%
@@ -734,11 +834,14 @@ export default function NetworkAvailabilityCalendar() {
                       <th className="text-left px-4 py-3 font-medium">設備/線路名稱</th>
                       <th className="text-left px-4 py-3 font-medium">開始時間</th>
                       <th className="text-left px-4 py-3 font-medium">結束時間</th>
+                      <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                       <th className="text-left px-4 py-3 font-medium">說明</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {quarterDeviceEvents.map((e) => (
+                    {quarterDeviceEvents.map((e) => {
+                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
+                      return (
                       <tr key={`d-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]">設備</span>
@@ -751,11 +854,14 @@ export default function NetworkAvailabilityCalendar() {
                         <td className="px-4 py-3">{e.asset_name}</td>
                         <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.start_time)}</td>
                         <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.end_time)}</td>
+                        <td className="text-right px-4 py-3 font-semibold">{stopHours}</td>
                         <td className="px-4 py-3 text-[var(--color-text-muted)]">{e.description || e.title || '-'}</td>
                       </tr>
-                    ))}
+                      )
+                    })}
                     {quarterCircuitEvents.map((e) => {
                       const circuit = circuits.find((c) => c.id === e.circuit_id)
+                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
                       return (
                         <tr key={`c-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                           <td className="px-4 py-3">
@@ -769,6 +875,7 @@ export default function NetworkAvailabilityCalendar() {
                           <td className="px-4 py-3">{circuit ? `${circuit.unit} ${circuit.circuit_number}` : e.circuit_id}</td>
                           <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.start_time)}</td>
                           <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.end_time)}</td>
+                          <td className="text-right px-4 py-3 font-semibold">{stopHours}</td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">{e.title || '-'}</td>
                         </tr>
                       )
@@ -781,30 +888,68 @@ export default function NetworkAvailabilityCalendar() {
         })()}
       </div>
 
-      {/* Day detail sidebar */}
+      {/* Day detail sidebar — grouped by unit + event signature */}
       {selectedDate && (
         <div className="w-80 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4 h-fit sticky top-6">
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
-          {selectedDayEvents.length === 0 ? (
+          {selectedDayEvents.length === 0 && selectedDayCircuitEvents.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-[var(--color-success)]">
               <CheckCircle className="w-4 h-4" /> 當日無事件
             </div>
           ) : (
             <div className="space-y-3">
-              {selectedDayEvents.map((e) => (
-                <div key={e.id} className="p-3 rounded-lg border border-[var(--color-border)]">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[e.plan_type] }}>
-                      {PLAN_TYPE_LABELS[e.plan_type]}
-                    </span>
-                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
-                  </div>
-                  <div className="font-medium text-sm mt-1">{e.title}</div>
-                  <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
-                  <div className="text-xs text-[var(--color-text-muted)]">{e.start_time.replace('T', ' ')} ~ {e.end_time.replace('T', ' ')}</div>
-                  {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
-                </div>
-              ))}
+              {(() => {
+                // Group by unit + event signature (title + start + end + plan_type)
+                interface UnitEventGroup { unit: string; deviceEvents: DowntimeEvent[]; circuitEvts: CircuitEvent[]; key: string }
+                const groupMap = new Map<string, UnitEventGroup>()
+
+                selectedDayEvents.forEach((e) => {
+                  const asset = networkAssets.find((a) => a.id === e.asset_id)
+                  const unitName = asset?.unit || '未知'
+                  const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+                  if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, deviceEvents: [], circuitEvts: [], key: sig })
+                  groupMap.get(sig)!.deviceEvents.push(e)
+                })
+
+                selectedDayCircuitEvents.forEach((e) => {
+                  const circuit = circuits.find((c) => c.id === e.circuit_id)
+                  const unitName = circuit?.unit || '未知'
+                  const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+                  if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, deviceEvents: [], circuitEvts: [], key: sig })
+                  groupMap.get(sig)!.circuitEvts.push(e)
+                })
+
+                return [...groupMap.values()].map(({ unit, deviceEvents: devEvts, circuitEvts: cirEvts, key }) => {
+                  const first: DowntimeEvent | CircuitEvent = devEvts[0] || cirEvts[0]
+                  const deviceIds = devEvts.map((e) => e.id)
+                  const circuitIds = cirEvts.map((e) => e.id)
+                  const countParts: string[] = []
+                  if (devEvts.length > 0) countParts.push(`${devEvts.length} 台設備`)
+                  if (cirEvts.length > 0) countParts.push(`${cirEvts.length} 條線路`)
+                  return (
+                    <div key={key} className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 bg-[var(--color-table-header)] flex items-center justify-between">
+                        <span className="text-sm font-semibold">{unit}</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">{countParts.join('、')}</span>
+                      </div>
+                      <div className="px-3 py-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[first.plan_type] }}>
+                            {PLAN_TYPE_LABELS[first.plan_type]}
+                          </span>
+                          <div className="flex gap-2">
+                            <button onClick={() => openEditEventGroup(devEvts, cirEvts, unit)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
+                            <button onClick={() => deleteEventGroup(deviceIds, circuitIds)} className="text-[var(--color-text-muted)] hover:text-[var(--color-weekend-sun)] text-xs">刪除</button>
+                          </div>
+                        </div>
+                        <div className="font-medium text-sm mt-1">{first.title}</div>
+                        <div className="text-xs text-[var(--color-text-muted)] mt-1">{format(new Date(first.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(first.end_time), 'yyyy/MM/dd HH:mm')}</div>
+                        {'description' in first && first.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.description}</div>}
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
             </div>
           )}
           <button onClick={() => openNewEvent(selectedDate)} className="w-full mt-3 text-xs py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">+ 新增事件</button>
@@ -812,14 +957,14 @@ export default function NetworkAvailabilityCalendar() {
       )}
 
       {/* New Event Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="新增網路事件">
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingIds.length > 0 || editingCircuitIds.length > 0 ? '編輯網路事件' : '新增網路事件'}>
         <div className="space-y-4">
           {/* 選擇方式 toggle */}
           <div>
             <label className="block text-sm font-medium mb-1">選擇方式</label>
             <div className="flex gap-2">
-              {([['unit', '依單位'], ['device', '依設備']] as const).map(([k, v]) => (
-                <button key={k} onClick={() => { setFormSelectMode(k); setFormSelectedUnit(''); setFormSelectedAssets([]) }}
+              {([['unit', '依單位'], ['device', '依設備'], ['circuit', '依線路']] as const).map(([k, v]) => (
+                <button key={k} onClick={() => { setFormSelectMode(k); setFormSelectedUnit(''); setFormSelectedAssets([]); setFormSelectedCircuits([]); setExpandCircuits(true); setExpandDevices(true); setCollapsedUnits(new Set()) }}
                   className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formSelectMode === k ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
                   {v}
                 </button>
@@ -827,7 +972,7 @@ export default function NetworkAvailabilityCalendar() {
             </div>
           </div>
 
-          {/* 依單位模式 */}
+          {/* ═══ 依單位模式 ═══ */}
           {formSelectMode === 'unit' && (
             <div>
               <label className="block text-sm font-medium mb-1">單位 *</label>
@@ -838,23 +983,52 @@ export default function NetworkAvailabilityCalendar() {
               </select>
               {formSelectedUnit && (() => {
                 const unitAssets = networkAssets.filter((a) => a.unit === formSelectedUnit)
+                const unitCircs = circuits.filter((c) => c.unit === formSelectedUnit)
                 const zones = [...new Set(unitAssets.map((a) => a.zone))] as Array<'internal' | 'external'>
                 return (
-                  <div className="mt-2 border border-[var(--color-border)] rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
-                    {zones.map((zone) => (
-                      <div key={zone}>
-                        <div className="text-xs font-medium text-[var(--color-text-muted)] mb-1">{ZONE_LABELS[zone]}</div>
-                        {unitAssets.filter((a) => a.zone === zone).map((a) => (
-                          <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1">
-                            <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)}
-                              className="rounded border-gray-300" />
-                            <span>{a.name}</span>
-                          </label>
-                        ))}
+                  <div className="mt-2 border border-[var(--color-border)] rounded-lg max-h-64 overflow-y-auto">
+                    {/* 線路（上方） */}
+                    {unitCircs.length > 0 && (
+                      <div className="border-b border-[var(--color-border)]">
+                        <button type="button" onClick={() => setExpandCircuits(!expandCircuits)}
+                          className="w-full flex items-center gap-1 px-3 py-2 text-sm font-medium hover:bg-[var(--color-hover)] transition-colors">
+                          {expandCircuits ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          線路 ({formSelectedCircuits.length}/{unitCircs.length})
+                        </button>
+                        {expandCircuits && (
+                          <div className="px-3 pb-2 space-y-0.5">
+                            {unitCircs.map((c) => (
+                              <label key={c.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1">
+                                <input type="checkbox" checked={formSelectedCircuits.includes(c.id)} onChange={() => toggleCircuit(c.id)} className="rounded border-gray-300" />
+                                <span>{c.circuit_number}{c.bandwidth ? ` (${c.bandwidth})` : ''}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                    <div className="text-xs text-[var(--color-text-muted)] pt-1">
-                      已選 {formSelectedAssets.length} 項設備
+                    )}
+                    {/* 設備（下方） */}
+                    <div>
+                      <button type="button" onClick={() => setExpandDevices(!expandDevices)}
+                        className="w-full flex items-center gap-1 px-3 py-2 text-sm font-medium hover:bg-[var(--color-hover)] transition-colors">
+                        {expandDevices ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        設備 ({formSelectedAssets.length}/{unitAssets.length})
+                      </button>
+                      {expandDevices && (
+                        <div className="px-3 pb-2 space-y-1">
+                          {zones.map((zone) => (
+                            <div key={zone}>
+                              <div className="text-xs font-medium text-[var(--color-text-muted)] mb-1">{ZONE_LABELS[zone]}</div>
+                              {unitAssets.filter((a) => a.zone === zone).map((a) => (
+                                <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1">
+                                  <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)} className="rounded border-gray-300" />
+                                  <span>{a.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
@@ -862,35 +1036,76 @@ export default function NetworkAvailabilityCalendar() {
             </div>
           )}
 
-          {/* 依設備模式 */}
+          {/* ═══ 依設備模式 ═══ */}
           {formSelectMode === 'device' && (
             <div>
-              <label className="block text-sm font-medium mb-1">設備 * (可多選)</label>
-              <div className="border border-[var(--color-border)] rounded-lg p-3 max-h-64 overflow-y-auto space-y-3">
+              <div className="text-sm font-medium mb-1">設備 (已選 {formSelectedAssets.length})</div>
+              <div className="border border-[var(--color-border)] rounded-lg max-h-64 overflow-y-auto">
                 {UNITS.map((unit) => {
                   const unitAssets = networkAssets.filter((a) => a.unit === unit)
                   const zones = [...new Set(unitAssets.map((a) => a.zone))] as Array<'internal' | 'external'>
+                  const isOpen = !collapsedUnits.has(`d-${unit}`)
+                  const selectedCount = unitAssets.filter((a) => formSelectedAssets.includes(a.id)).length
                   return (
-                    <div key={unit}>
-                      <div className="text-sm font-semibold mb-1">{unit}</div>
-                      {zones.map((zone) => (
-                        <div key={zone} className="ml-2 mb-1">
-                          <div className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5">{ZONE_LABELS[zone]}</div>
-                          {unitAssets.filter((a) => a.zone === zone).map((a) => (
-                            <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-2">
-                              <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)}
-                                className="rounded border-gray-300" />
-                              <span>{a.name}</span>
-                            </label>
+                    <div key={unit} className="border-b border-[var(--color-border)] last:border-b-0">
+                      <button type="button" onClick={() => setCollapsedUnits(prev => { const s = new Set(prev); s.has(`d-${unit}`) ? s.delete(`d-${unit}`) : s.add(`d-${unit}`); return s })}
+                        className="w-full flex items-center gap-1 px-3 py-2 text-sm font-semibold hover:bg-[var(--color-hover)] transition-colors">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {unit}
+                        <span className="text-xs font-normal text-[var(--color-text-muted)] ml-auto">{selectedCount}/{unitAssets.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-3 pb-2 space-y-1">
+                          {zones.map((zone) => (
+                            <div key={zone}>
+                              <div className="text-xs font-medium text-[var(--color-text-muted)] mb-0.5 ml-1">{ZONE_LABELS[zone]}</div>
+                              {unitAssets.filter((a) => a.zone === zone).map((a) => (
+                                <label key={a.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-1">
+                                  <input type="checkbox" checked={formSelectedAssets.includes(a.id)} onChange={() => toggleAsset(a.id)} className="rounded border-gray-300" />
+                                  <span>{a.name}</span>
+                                </label>
+                              ))}
+                            </div>
                           ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )
                 })}
-                <div className="text-xs text-[var(--color-text-muted)] pt-1 border-t border-[var(--color-border)]">
-                  已選 {formSelectedAssets.length} 項設備
-                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ 依線路模式 ═══ */}
+          {formSelectMode === 'circuit' && (
+            <div>
+              <div className="text-sm font-medium mb-1">線路 (已選 {formSelectedCircuits.length})</div>
+              <div className="border border-[var(--color-border)] rounded-lg max-h-64 overflow-y-auto">
+                {[...new Set(circuits.map((c) => c.unit))].map((unit) => {
+                  const unitCircs = circuits.filter((c) => c.unit === unit)
+                  const isOpen = !collapsedUnits.has(`c-${unit}`)
+                  const selectedCount = unitCircs.filter((c) => formSelectedCircuits.includes(c.id)).length
+                  return (
+                    <div key={unit} className="border-b border-[var(--color-border)] last:border-b-0">
+                      <button type="button" onClick={() => setCollapsedUnits(prev => { const s = new Set(prev); s.has(`c-${unit}`) ? s.delete(`c-${unit}`) : s.add(`c-${unit}`); return s })}
+                        className="w-full flex items-center gap-1 px-3 py-2 text-sm font-semibold hover:bg-[var(--color-hover)] transition-colors">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {unit}
+                        <span className="text-xs font-normal text-[var(--color-text-muted)] ml-auto">{selectedCount}/{unitCircs.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-3 pb-2 space-y-0.5">
+                          {unitCircs.map((c) => (
+                            <label key={c.id} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-[var(--color-table-header)] rounded px-1 ml-1">
+                              <input type="checkbox" checked={formSelectedCircuits.includes(c.id)} onChange={() => toggleCircuit(c.id)} className="rounded border-gray-300" />
+                              <span>{c.circuit_number}{c.bandwidth ? ` (${c.bandwidth})` : ''}{c.ip_address ? ` — ${c.ip_address}` : ''}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -935,10 +1150,10 @@ export default function NetworkAvailabilityCalendar() {
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">取消</button>
-            <button onClick={saveEvent} disabled={formSelectedAssets.length === 0 || saving}
-              className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${formSelectedAssets.length > 0 && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
+            <button onClick={saveEvent} disabled={(formSelectedAssets.length === 0 && formSelectedCircuits.length === 0) || saving}
+              className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${(formSelectedAssets.length > 0 || formSelectedCircuits.length > 0) && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              儲存{formSelectedAssets.length > 1 ? ` (${formSelectedAssets.length} 筆)` : ''}
+              {editingIds.length > 0 || editingCircuitIds.length > 0 ? '更新' : `儲存${(formSelectedAssets.length + formSelectedCircuits.length) > 1 ? ` (${formSelectedAssets.length + formSelectedCircuits.length} 筆)` : ''}`}
             </button>
           </div>
         </div>

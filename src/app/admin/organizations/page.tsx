@@ -75,7 +75,7 @@ function generateDevices(unitName: string, unitType: UnitType, qtyMap?: DeviceQt
       const qty = qtyMap?.[`${zone}_${dt}`] ?? 1
       if (qty > 0) {
         devices.push({
-          id: crypto.randomUUID(),
+          id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (`${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
           name: `${unitName}${ZONE_LABELS[zone]}${dt}`,
           zone,
           device_type: dt,
@@ -506,7 +506,6 @@ export default function OrganizationsPage() {
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
                                 <span className="text-xs font-mono text-[var(--color-badge-blue-text)]">x{d.quantity || 1}</span>
-                                <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
                               <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                 <Trash2 className="w-3 h-3" />
@@ -528,7 +527,6 @@ export default function OrganizationsPage() {
                               <div className="flex items-center gap-2">
                                 <span>{d.device_type}</span>
                                 <span className="text-xs font-mono text-[var(--color-warning)]">x{d.quantity || 1}</span>
-                                <span className="text-xs text-[var(--color-text-muted)]">({d.vendor})</span>
                               </div>
                               <button onClick={() => removeDevice(unit.id, d.id)} className="text-[var(--color-danger)] hover:text-[var(--color-danger)] p-0.5">
                                 <Trash2 className="w-3 h-3" />

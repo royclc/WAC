@@ -56,6 +56,18 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   other: '#6B7280',
 }
 
+type EventPlanType = 'planned' | 'unplanned'
+
+const PLAN_TYPE_LABELS: Record<EventPlanType, string> = {
+  planned: '計畫性',
+  unplanned: '非計畫性',
+}
+
+const PLAN_TYPE_COLORS: Record<EventPlanType, string> = {
+  planned: '#F59E0B',
+  unplanned: '#EF4444',
+}
+
 export default function AvailabilityCalendar({ assetType, typeName }: AvailabilityCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [events, setEvents] = useState<DowntimeEvent[]>([])
@@ -67,8 +79,10 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
   const [allAssets, setAllAssets] = useState<AssetOption[]>([])
 
   // Form state
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [formAsset, setFormAsset] = useState('')
   const [formType, setFormType] = useState<'downtime' | 'maintenance' | 'other'>('downtime')
+  const [formPlanType, setFormPlanType] = useState<EventPlanType>('unplanned')
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formStart, setFormStart] = useState('')
@@ -166,7 +180,8 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
 
     const assetStats = assets.map((asset) => {
       const assetEvents = events.filter((e) => e.asset_id === asset.id)
-      let downtimeMinutes = 0
+      let plannedMinutes = 0
+      let unplannedMinutes = 0
 
       const monthStart = new Date(year, month, 1)
       const monthEnd = new Date(year, month + 1, 1)
@@ -177,23 +192,28 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
         const effectiveStart = eStart < monthStart ? monthStart : eStart
         const effectiveEnd = eEnd > monthEnd ? monthEnd : eEnd
         if (effectiveEnd > effectiveStart) {
-          downtimeMinutes += (effectiveEnd.getTime() - effectiveStart.getTime()) / 60000
+          const mins = (effectiveEnd.getTime() - effectiveStart.getTime()) / 60000
+          if (e.plan_type === 'planned') plannedMinutes += mins
+          else unplannedMinutes += mins
         }
       })
 
-      const downtimeHours = Math.round((downtimeMinutes / 60) * 100) / 100
-      const uptimeHours = Math.round((totalHours - downtimeHours) * 100) / 100
-      const pct = totalHours > 0 ? Math.round(((totalHours - downtimeHours) / totalHours) * 10000) / 100 : 100
+      const plannedHours = Math.round((plannedMinutes / 60) * 100) / 100
+      const unplannedHours = Math.round((unplannedMinutes / 60) * 100) / 100
+      const downtimeHours = Math.round((plannedHours + unplannedHours) * 100) / 100
+      const pct = totalHours > 0 ? Math.round(((totalHours - unplannedHours) / totalHours) * 10000) / 100 : 100
 
-      return { asset, downtimeHours, uptimeHours, totalHours, pct, eventCount: assetEvents.length }
+      return { asset, plannedHours, unplannedHours, downtimeHours, totalHours, pct, eventCount: assetEvents.length }
     })
 
     return assetStats
   }, [currentMonth, events, assets])
 
   function openNewEvent(date?: Date) {
+    setEditingId(null)
     setFormAsset(assets[0]?.id || '')
     setFormType('downtime')
+    setFormPlanType('unplanned')
     setFormTitle('')
     setFormDesc('')
     const d = date || new Date()
@@ -202,26 +222,50 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     setShowModal(true)
   }
 
+  function openEditEvent(e: DowntimeEvent) {
+    setEditingId(e.id)
+    setFormAsset(e.asset_id)
+    setFormType(e.event_type)
+    setFormPlanType((e.plan_type as EventPlanType) || 'unplanned')
+    setFormTitle(e.title)
+    setFormDesc(e.description)
+    setFormStart(e.start_time.includes('T') ? e.start_time.slice(0, 16) : e.start_time)
+    setFormEnd(e.end_time.includes('T') ? e.end_time.slice(0, 16) : e.end_time)
+    setShowModal(true)
+  }
+
   async function saveEvent() {
     if (!formAsset || !formTitle || !formStart || !formEnd) return
     const asset = allAssets.find((a) => a.id === formAsset)
     setSaving(true)
 
-    const { error } = await supabase.from('downtime_events').insert({
-      asset_type: assetType,
-      asset_id: formAsset,
-      asset_name: asset?.name || '',
-      event_type: formType,
-      title: formTitle,
-      description: formDesc,
-      start_time: formStart,
-      end_time: formEnd,
-    })
-
-    setSaving(false)
-    if (!error) {
-      await fetchEvents()
-      setShowModal(false)
+    if (editingId) {
+      const { error } = await supabase.from('downtime_events').update({
+        asset_id: formAsset,
+        asset_name: asset?.name || '',
+        event_type: formType,
+        plan_type: formPlanType,
+        title: formTitle,
+        description: formDesc,
+        start_time: formStart,
+        end_time: formEnd,
+      }).eq('id', editingId)
+      setSaving(false)
+      if (!error) { await fetchEvents(); setShowModal(false) }
+    } else {
+      const { error } = await supabase.from('downtime_events').insert({
+        asset_type: assetType,
+        asset_id: formAsset,
+        asset_name: asset?.name || '',
+        event_type: formType,
+        plan_type: formPlanType,
+        title: formTitle,
+        description: formDesc,
+        start_time: formStart,
+        end_time: formEnd,
+      })
+      setSaving(false)
+      if (!error) { await fetchEvents(); setShowModal(false) }
     }
   }
 
@@ -229,6 +273,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     const { error } = await supabase.from('downtime_events').delete().eq('id', id)
     if (!error) {
       await fetchEvents()
+      setSelectedDate(null)
     }
   }
 
@@ -285,15 +330,15 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
               const inMonth = isSameMonth(date, currentMonth)
               const today = isToday(date)
               const selected = selectedDate && isSameDay(date, selectedDate)
-              const hasDowntime = dayEvents.some((e) => e.event_type === 'downtime')
+              const hasUnplanned = dayEvents.some((e) => e.plan_type === 'unplanned')
               const dayOfWeek = date.getDay()
 
               return (
                 <div
                   key={idx}
-                  onClick={() => setSelectedDate(date)}
+                  onClick={() => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
                   className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${
-                    !inMonth ? 'bg-[var(--color-bg-elevated)]' : hasDowntime ? 'bg-[var(--color-badge-red)]/50' : 'hover:bg-[var(--color-primary-dim)]'
+                    !inMonth ? 'bg-[var(--color-bg-elevated)]' : hasUnplanned ? 'bg-[var(--color-badge-red)]/50' : dayEvents.length > 0 ? 'bg-[var(--color-warning)]/10' : 'hover:bg-[var(--color-primary-dim)]'
                   } ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -301,12 +346,12 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                       {format(date, 'd')}
                     </span>
                     {dayEvents.length > 0 && (
-                      <AlertTriangle className={`w-4 h-4 ${hasDowntime ? 'text-[var(--color-danger)]' : 'text-[var(--color-warning)]'}`} />
+                      <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-danger)]' : 'text-[var(--color-warning)]'}`} />
                     )}
                   </div>
                   <div className="space-y-0.5">
                     {dayEvents.slice(0, 2).map((e) => (
-                      <div key={e.id} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
+                      <div key={e.id} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[(e.plan_type as EventPlanType) || 'unplanned'] }}>
                         {e.asset_name}
                       </div>
                     ))}
@@ -330,30 +375,30 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
               <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
                 <th className="text-left px-4 py-3 font-medium">設備名稱</th>
                 {assets.some((a) => a.group) && <th className="text-left px-4 py-3 font-medium">單位</th>}
-                <th className="text-right px-4 py-3 font-medium">總時數</th>
-                <th className="text-right px-4 py-3 font-medium">斷線時數</th>
-                <th className="text-right px-4 py-3 font-medium">運作時數</th>
+                <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數 (hrs)</th>
+                <th className="text-right px-4 py-3 font-medium">計畫性停止<br/>服務時間 (hrs)</th>
+                <th className="text-right px-4 py-3 font-medium">非計畫性停止<br/>服務時間 (hrs)</th>
+                <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                 <th className="text-right px-4 py-3 font-medium">可用率</th>
-                <th className="text-right px-4 py-3 font-medium">事件數</th>
               </tr>
             </thead>
             <tbody>
-              {monthStats.map(({ asset, totalHours, downtimeHours, uptimeHours, pct, eventCount }) => (
+              {monthStats.map(({ asset, totalHours, plannedHours, unplannedHours, downtimeHours, pct }) => (
                 <tr key={asset.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                   <td className="px-4 py-3">
                     <div className="font-medium">{asset.name}</div>
                     {asset.ip_address && <div className="text-xs text-[var(--color-text-muted)]">{asset.ip_address}</div>}
                   </td>
                   {assets.some((a) => a.group) && <td className="px-4 py-3 text-sm">{asset.group || '-'}</td>}
-                  <td className="text-right px-4 py-3">{totalHours}h</td>
-                  <td className="text-right px-4 py-3 text-[var(--color-danger)]">{downtimeHours}h</td>
-                  <td className="text-right px-4 py-3 text-[var(--color-badge-green-text)]">{uptimeHours}h</td>
+                  <td className="text-right px-4 py-3">{totalHours}</td>
+                  <td className="text-right px-4 py-3 text-[var(--color-warning)]">{plannedHours}</td>
+                  <td className="text-right px-4 py-3 text-[var(--color-danger)]">{unplannedHours}</td>
+                  <td className="text-right px-4 py-3 font-semibold">{downtimeHours}</td>
                   <td className="text-right px-4 py-3">
                     <span className={`font-semibold ${pct >= 99.9 ? 'text-[var(--color-badge-green-text)]' : pct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                       {pct}%
                     </span>
                   </td>
-                  <td className="text-right px-4 py-3">{eventCount}</td>
                 </tr>
               ))}
             </tbody>
@@ -428,16 +473,25 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
+                      <th className="text-left px-4 py-3 font-medium">事件性質</th>
                       <th className="text-left px-4 py-3 font-medium">事件類型</th>
                       <th className="text-left px-4 py-3 font-medium">設備</th>
                       <th className="text-left px-4 py-3 font-medium">開始時間</th>
                       <th className="text-left px-4 py-3 font-medium">結束時間</th>
+                      <th className="text-right px-4 py-3 font-medium">停止服務<br/>時數 (hrs)</th>
                       <th className="text-left px-4 py-3 font-medium">說明</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {quarterEvents.map((e) => (
+                    {quarterEvents.map((e) => {
+                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
+                      return (
                       <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
+                        <td className="px-4 py-3">
+                          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[(e.plan_type as EventPlanType) || 'unplanned'] }}>
+                            {PLAN_TYPE_LABELS[(e.plan_type as EventPlanType) || 'unplanned']}
+                          </span>
+                        </td>
                         <td className="px-4 py-3">
                           <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
                             {EVENT_TYPE_LABELS[e.event_type]}
@@ -446,9 +500,11 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                         <td className="px-4 py-3">{e.asset_name}</td>
                         <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.start_time)}</td>
                         <td className="px-4 py-3 font-mono text-xs">{formatROCDateTime(e.end_time)}</td>
+                        <td className="text-right px-4 py-3 font-semibold">{stopHours}</td>
                         <td className="px-4 py-3 text-[var(--color-text-muted)]">{e.description || '-'}</td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -463,22 +519,30 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           <h3 className="font-semibold mb-3">{format(selectedDate, 'yyyy/MM/dd')}</h3>
           {selectedDayEvents.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-[var(--color-badge-green-text)]">
-              <CheckCircle className="w-4 h-4" /> 當日無斷線事件
+              <CheckCircle className="w-4 h-4" /> 當日無事件
             </div>
           ) : (
             <div className="space-y-3">
               {selectedDayEvents.map((e) => (
                 <div key={e.id} className="p-3 rounded-lg border border-[var(--color-border)]">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
-                      {EVENT_TYPE_LABELS[e.event_type]}
-                    </span>
-                    <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] text-xs">刪除</button>
+                    <div className="flex gap-1">
+                      <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[(e.plan_type as EventPlanType) || 'unplanned'] }}>
+                        {PLAN_TYPE_LABELS[(e.plan_type as EventPlanType) || 'unplanned']}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
+                        {EVENT_TYPE_LABELS[e.event_type]}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => openEditEvent(e)} className="text-[var(--color-primary)] hover:underline text-xs">編輯</button>
+                      <button onClick={() => deleteEvent(e.id)} className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] text-xs">刪除</button>
+                    </div>
                   </div>
                   <div className="font-medium text-sm mt-1">{e.title}</div>
                   <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
                   <div className="text-xs text-[var(--color-text-muted)]">
-                    {e.start_time.replace('T', ' ')} ~ {e.end_time.replace('T', ' ')}
+                    {format(new Date(e.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(e.end_time), 'yyyy/MM/dd HH:mm')}
                   </div>
                   {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
                 </div>
@@ -495,7 +559,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
       )}
 
       {/* New Event Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="新增斷線/維護事件">
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingId ? '編輯事件' : '新增斷線/維護事件'}>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">設備 *</label>
@@ -525,6 +589,17 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
             </select>
           </div>
           <div>
+            <label className="block text-sm font-medium mb-1">事件性質 *</label>
+            <div className="flex gap-2">
+              {Object.entries(PLAN_TYPE_LABELS).map(([k, v]) => (
+                <button key={k} onClick={() => setFormPlanType(k as EventPlanType)}
+                  className={`flex-1 px-3 py-2 rounded-lg border text-sm transition-colors ${formPlanType === k ? (k === 'planned' ? 'bg-[var(--color-warning-dim)] border-[var(--color-warning)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-dim)] border-[var(--color-danger)] text-[var(--color-danger)]') : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]'}`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
             <label className="block text-sm font-medium mb-1">事件標題 *</label>
             <input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
@@ -546,7 +621,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveEvent} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              儲存
+              {editingId ? '更新' : '儲存'}
             </button>
           </div>
         </div>
