@@ -75,7 +75,7 @@ function generateDevices(unitName: string, unitType: UnitType, qtyMap?: DeviceQt
       const qty = qtyMap?.[`${zone}_${dt}`] ?? 1
       if (qty > 0) {
         devices.push({
-          id: crypto.randomUUID(),
+          id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (`${Date.now()}-${Math.random().toString(36).slice(2, 11)}`),
           name: `${unitName}${ZONE_LABELS[zone]}${dt}`,
           zone,
           device_type: dt,

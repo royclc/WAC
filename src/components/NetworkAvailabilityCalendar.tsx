@@ -265,6 +265,11 @@ export default function NetworkAvailabilityCalendar() {
     return events.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
   }
 
+  function getCircuitEventsForDay(date: Date) {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    return circuitEvents.filter((e) => dateStr >= e.start_time.slice(0, 10) && dateStr <= e.end_time.slice(0, 10))
+  }
+
   // ═══ Report 1: 設備類型彙總 (Image 3) ═══
   const deviceTypeReport = useMemo(() => {
     const hqZones: Array<{ zone: 'internal' | 'external'; label: string }> = [
@@ -537,25 +542,33 @@ export default function NetworkAvailabilityCalendar() {
           <div className="grid grid-cols-7">
             {days.map((date, idx) => {
               const dayEvents = getEventsForDay(date)
+              const dayCircuitEvts = getCircuitEventsForDay(date)
               const inMonth = isSameMonth(date, currentMonth)
               const today = isToday(date)
               const selected = selectedDate && isSameDay(date, selectedDate)
-              const hasUnplanned = dayEvents.some((e) => e.plan_type === 'unplanned')
+              const hasUnplanned = dayEvents.some((e) => e.plan_type === 'unplanned') || dayCircuitEvts.some((e) => e.plan_type === 'unplanned')
+              const hasAnyEvent = dayEvents.length > 0 || dayCircuitEvts.length > 0
               const dow = date.getDay()
               return (
                 <div key={idx} onClick={() => setSelectedDate(prev => prev && isSameDay(prev, date) ? null : date)}
-                  className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-[var(--color-day-outside)]' : hasUnplanned ? 'bg-[var(--color-danger-dim)]' : dayEvents.length > 0 ? 'bg-[var(--color-warning-dim)]' : 'hover:bg-[var(--color-table-row-hover)]'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
+                  className={`min-h-[90px] border-b border-r border-[var(--color-border)] p-1.5 cursor-pointer transition-colors ${!inMonth ? 'bg-[var(--color-day-outside)]' : hasUnplanned ? 'bg-[var(--color-danger-dim)]' : hasAnyEvent ? 'bg-[var(--color-warning-dim)]' : 'hover:bg-[var(--color-table-row-hover)]'} ${selected ? 'ring-2 ring-[var(--color-primary)] ring-inset' : ''}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className={`text-sm w-7 h-7 flex items-center justify-center rounded-full ${today ? 'bg-[var(--color-primary)] text-white font-bold' : ''} ${!inMonth ? 'text-[var(--color-text-dim)]' : ''} ${dow === 0 ? 'text-[var(--color-weekend-sun)]' : dow === 6 ? 'text-[var(--color-weekend-sat)]' : ''}`}>{format(date, 'd')}</span>
-                    {dayEvents.length > 0 && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-weekend-sun)]' : 'text-[var(--color-warning)]'}`} />}
+                    {hasAnyEvent && <AlertTriangle className={`w-4 h-4 ${hasUnplanned ? 'text-[var(--color-weekend-sun)]' : 'text-[var(--color-warning)]'}`} />}
                   </div>
                   <div className="space-y-0.5">
                     {(() => {
-                      // 以單位為主顯示，不顯示個別設備
+                      // 以單位為主顯示，合併設備事件與線路事件
                       const unitMap = new Map<string, EventPlanType>()
                       dayEvents.forEach((e) => {
                         const asset = networkAssets.find((a) => a.id === e.asset_id)
                         const unitName = asset?.unit || '未知'
+                        const existing = unitMap.get(unitName)
+                        if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
+                      })
+                      dayCircuitEvts.forEach((e) => {
+                        const circuit = circuits.find((c) => c.id === e.circuit_id)
+                        const unitName = circuit?.unit || '未知'
                         const existing = unitMap.get(unitName)
                         if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
                       })

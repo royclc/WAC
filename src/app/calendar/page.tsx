@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import AppShell from '@/components/AppShell'
 import CalendarGrid from '@/components/CalendarGrid'
 import Modal from '@/components/Modal'
-import { Plus, Clock, User, FileText, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Clock, User, FileText, Trash2, Loader2, Pencil } from 'lucide-react'
 import { format, formatMonthTitle, isSameDay } from '@/lib/calendar-utils'
 import type { WorkEvent, LeaveRecord } from '@/types/database'
 
@@ -59,6 +59,7 @@ export default function CalendarPage() {
   const [showEventModal, setShowEventModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [editingEvent, setEditingEvent] = useState<LocalWorkEvent | null>(null)
+  const [editingLeave, setEditingLeave] = useState<LocalLeave | null>(null)
 
   // Event form state
   const [formTitle, setFormTitle] = useState('')
@@ -197,12 +198,26 @@ export default function CalendarPage() {
   }
 
   function openNewLeave(date?: Date) {
+    setEditingLeave(null)
     setLeaveUser('')
     setLeaveType('annual')
     setLeaveDate(date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
     setLeaveHalf(false)
     setLeavePeriod('morning')
     setLeaveNote('')
+    setShowLeaveModal(true)
+  }
+
+  function openEditLeave(id: string) {
+    const lv = leaves.find((l) => l.id === id)
+    if (!lv) return
+    setEditingLeave(lv)
+    setLeaveUser(lv.user_name)
+    setLeaveType(lv.leave_type)
+    setLeaveDate(lv.leave_date)
+    setLeaveHalf(lv.is_half_day)
+    setLeavePeriod(lv.half_day_period || 'morning')
+    setLeaveNote(lv.note || '')
     setShowLeaveModal(true)
   }
 
@@ -217,10 +232,23 @@ export default function CalendarPage() {
       half_day_period: leavePeriod,
       note: leaveNote,
     }
-    await supabase.from('leave_records').insert(payload)
+    if (editingLeave) {
+      await supabase.from('leave_records').update(payload).eq('id', editingLeave.id)
+    } else {
+      await supabase.from('leave_records').insert(payload)
+    }
     await fetchLeaves()
     setSaving(false)
     setShowLeaveModal(false)
+  }
+
+  async function deleteLeave(id: string) {
+    setSaving(true)
+    await supabase.from('leave_records').delete().eq('id', id)
+    await fetchLeaves()
+    setSaving(false)
+    setShowLeaveModal(false)
+    setSelectedDate(null)
   }
 
   function toggleAssignee(name: string) {
@@ -368,8 +396,11 @@ export default function CalendarPage() {
             ))}
 
             {selectedDayLeaves.map((lv) => (
-              <div key={lv.id} className="mb-3 p-3 rounded-lg bg-[var(--color-bg-elevated)] border border-[var(--color-border)]">
-                <div className="text-sm font-medium">{lv.user_name} — {LEAVE_TYPES[lv.leave_type]}</div>
+              <div key={lv.id} className="mb-3 p-3 rounded-lg bg-[var(--color-bg-elevated)] border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-hover)]" onClick={() => openEditLeave(lv.id)}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">{lv.user_name} — {LEAVE_TYPES[lv.leave_type]}</div>
+                  <Pencil className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+                </div>
                 {lv.is_half_day && (
                   <div className="text-xs text-[var(--color-text-muted)]">
                     {lv.half_day_period === 'morning' ? '上午' : '下午'}半天
@@ -476,7 +507,7 @@ export default function CalendarPage() {
       </Modal>
 
       {/* Leave Modal */}
-      <Modal open={showLeaveModal} onClose={() => setShowLeaveModal(false)} title="新增請假">
+      <Modal open={showLeaveModal} onClose={() => setShowLeaveModal(false)} title={editingLeave ? '編輯請假' : '新增請假'}>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">人員 *</label>
@@ -511,7 +542,13 @@ export default function CalendarPage() {
             <label className="block text-sm font-medium mb-1">備註</label>
             <input value={leaveNote} onChange={(e) => setLeaveNote(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex gap-2 pt-2">
+            {editingLeave && (
+              <button onClick={() => deleteLeave(editingLeave.id)} disabled={saving} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} 刪除
+              </button>
+            )}
+            <div className="flex-1" />
             <button onClick={() => setShowLeaveModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveLeave} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} 儲存
