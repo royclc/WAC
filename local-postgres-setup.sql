@@ -137,20 +137,6 @@ CREATE TABLE IF NOT EXISTS api.users (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- ── 網路單位 ──
-CREATE TABLE IF NOT EXISTS api.network_units (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  zone TEXT DEFAULT '',
-  device_type TEXT DEFAULT '',
-  ip_address TEXT DEFAULT '',
-  vendor TEXT DEFAULT '',
-  location TEXT DEFAULT '',
-  description TEXT DEFAULT '',
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
 -- ── 線路管理 ──
 CREATE TABLE IF NOT EXISTS api.circuits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

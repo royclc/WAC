@@ -116,20 +116,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- ── 網路單位(網路管理) ──
-CREATE TABLE IF NOT EXISTS network_units (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  zone TEXT DEFAULT '',
-  device_type TEXT DEFAULT '',
-  ip_address TEXT DEFAULT '',
-  vendor TEXT DEFAULT '',
-  location TEXT DEFAULT '',
-  description TEXT DEFAULT '',
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
 -- ── 線路管理 ──
 CREATE TABLE IF NOT EXISTS circuits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -178,9 +164,6 @@ CREATE POLICY "Allow all" ON event_types FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all" ON users FOR ALL USING (true) WITH CHECK (true);
-
-ALTER TABLE network_units ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all" ON network_units FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE circuits ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all" ON circuits FOR ALL USING (true) WITH CHECK (true);

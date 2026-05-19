@@ -23,7 +23,7 @@ END $$;
 TRUNCATE vendors, hardware_categories, hardware_models, hardware_assets,
          maintenance_categories, maintenance_events,
          organizations, org_devices, org_circuits,
-         event_types, users, network_units, circuits CASCADE;
+         event_types, users, circuits CASCADE;
 
 -- ============================================
 -- 1. 廠商

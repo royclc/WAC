@@ -9,7 +9,7 @@ TRUNCATE TABLE circuit_events, downtime_events, leave_records, work_events,
   org_circuits, org_devices, organizations,
   maintenance_events, maintenance_categories,
   hardware_models, hardware_assets, hardware_categories,
-  circuits, network_units, event_types, users, vendors
+  circuits, event_types, users, vendors
   CASCADE;
 
 -- ── 廠商 ──
