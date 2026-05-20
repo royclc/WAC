@@ -688,7 +688,7 @@ export default function ReportsPage() {
 
   // ═══ Network: Quarter event footnotes with device group mapping ═══
   interface EventNote { date: string; unit: string; title: string; planType: string; groupLabel: string; periodIdx: number }
-  const { quarterEventNotes, notesByGroupPeriod, notesByGroup } = useMemo(() => {
+  const { quarterEventNotes, notesByGroupPeriod, notesByGroup, notesByGroupPeriodPlanned, notesByGroupPeriodUnplanned } = useMemo(() => {
     const qStart = quarterRange.start
     const qEnd = quarterRange.end
     const assetMap = new Map<string, NetworkAsset>()
@@ -742,24 +742,30 @@ export default function ReportsPage() {
     const sortedNotes = sortedIndices.map((i) => origNotes[i])
     const sortedGP = sortedIndices.map((i) => origGP[i])
 
-    // Step 2: Build mapping: groupLabel|periodIdx → note indices (1-based)
+    // Step 2: Build mappings
     const byGroupPeriod = new Map<string, number[]>()
     const byGroup = new Map<string, number[]>()
-    sortedNotes.forEach((_, idx) => {
+    const byGroupPeriodPlanned = new Map<string, number[]>()
+    const byGroupPeriodUnplanned = new Map<string, number[]>()
+    const addTo = (map: Map<string, number[]>, key: string, num: number) => {
+      if (!map.has(key)) map.set(key, [])
+      if (!map.get(key)!.includes(num)) map.get(key)!.push(num)
+    }
+    sortedNotes.forEach((note, idx) => {
       const noteNum = idx + 1
       const gp = sortedGP[idx]
       gp.groupLabels.forEach((gl) => {
         gp.periodIdxs.forEach((pi) => {
           const gpKey = `${gl}|${pi}`
-          if (!byGroupPeriod.has(gpKey)) byGroupPeriod.set(gpKey, [])
-          if (!byGroupPeriod.get(gpKey)!.includes(noteNum)) byGroupPeriod.get(gpKey)!.push(noteNum)
+          addTo(byGroupPeriod, gpKey, noteNum)
+          if (note.planType === '計畫性') addTo(byGroupPeriodPlanned, gpKey, noteNum)
+          else addTo(byGroupPeriodUnplanned, gpKey, noteNum)
         })
-        if (!byGroup.has(gl)) byGroup.set(gl, [])
-        if (!byGroup.get(gl)!.includes(noteNum)) byGroup.get(gl)!.push(noteNum)
+        addTo(byGroup, gl, noteNum)
       })
     })
 
-    return { quarterEventNotes: sortedNotes, notesByGroupPeriod: byGroupPeriod, notesByGroup: byGroup }
+    return { quarterEventNotes: sortedNotes, notesByGroupPeriod: byGroupPeriod, notesByGroup: byGroup, notesByGroupPeriodPlanned: byGroupPeriodPlanned, notesByGroupPeriodUnplanned: byGroupPeriodUnplanned }
   }, [downtimeEvents, networkAssets, deviceGroups, quarterRange, quarterPeriods])
 
   // ═══ Circuit summaries for fiber report ═══
@@ -933,9 +939,6 @@ export default function ReportsPage() {
       const groupNoteLabel = groupNotes ? (groupNotes.length === 1 ? `【註${groupNotes[0]}】` : `【註${groupNotes[0]}~註${groupNotes[groupNotes.length - 1]}】`) : ''
 
       device.monthRows.forEach((row, i) => {
-        const periodNotes = notesByGroupPeriod.get(`${device.label}|${i}`)
-        const pNoteLabel = periodNotes ? (periodNotes.length === 1 ? `【註${periodNotes[0]}】` : `【註${periodNotes[0]}~註${periodNotes[periodNotes.length - 1]}】`) : ''
-
         const cells = []
         if (i === 0) {
           cells.push(new TableCell({
@@ -946,8 +949,7 @@ export default function ReportsPage() {
         }
         cells.push(docxCell(row.period.label))
         cells.push(docxCell(row.hasData ? (device.totalCount > 1 ? `${row.hoursPerDevice}*${device.totalCount}` : `${row.hoursPerDevice}`) : '', { alignment: AlignmentType.RIGHT }))
-        const plannedText = row.hasData ? `${row.plannedHours}${pNoteLabel ? `\n${pNoteLabel}` : ''}` : ''
-        cells.push(docxCell(plannedText, { alignment: AlignmentType.RIGHT }))
+        cells.push(docxCell(row.hasData ? `${row.plannedHours}` : '', { alignment: AlignmentType.RIGHT }))
         cells.push(docxCell(row.hasData ? `${row.unplannedHours}` : '', { alignment: AlignmentType.RIGHT }))
         cells.push(docxCell(row.hasData ? `${row.availabilityPct}%` : '', { alignment: AlignmentType.RIGHT }))
         qRows.push(new TableRow({ children: cells }))
@@ -988,16 +990,29 @@ export default function ReportsPage() {
       ],
     }))
 
+    const monthNoteSet = new Set<number>()
     monthlySummary.forEach((row) => {
+      const pNotes = notesByGroupPeriodPlanned.get(`${row.label}|${currentPeriodIndex}`)
+      const uNotes = notesByGroupPeriodUnplanned.get(`${row.label}|${currentPeriodIndex}`)
+      const pLabel = pNotes ? (pNotes.length === 1 ? `【註${pNotes[0]}】` : `【註${pNotes[0]}~註${pNotes[pNotes.length - 1]}】`) : ''
+      const uLabel = uNotes ? (uNotes.length === 1 ? `【註${uNotes[0]}】` : `【註${uNotes[0]}~註${uNotes[uNotes.length - 1]}】`) : ''
+      pNotes?.forEach((n) => monthNoteSet.add(n))
+      uNotes?.forEach((n) => monthNoteSet.add(n))
       mRows.push(new TableRow({
         children: [
           docxCell(row.label, { bold: true }),
           docxCell(row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : `${row.hoursPerDevice}`, { alignment: AlignmentType.RIGHT }),
-          docxCell(`${row.plannedHours}`, { alignment: AlignmentType.RIGHT }),
-          docxCell(`${row.unplannedHours}`, { alignment: AlignmentType.RIGHT }),
+          docxCell(`${row.plannedHours}${pLabel ? `\n${pLabel}` : ''}`, { alignment: AlignmentType.RIGHT }),
+          docxCell(`${row.unplannedHours}${uLabel ? `\n${uLabel}` : ''}`, { alignment: AlignmentType.RIGHT }),
           docxCell(`${row.availabilityPct}%`, { alignment: AlignmentType.RIGHT }),
         ],
       }))
+    })
+
+    const monthNoteSorted = Array.from(monthNoteSet).sort((a, b) => a - b)
+    const mFootnotes = monthNoteSorted.map((num) => {
+      const note = quarterEventNotes[num - 1]
+      return new Paragraph({ children: [new TextRun({ text: `※【註${num}】${note.date} ${note.unit}-${note.title}（${note.planType}）`, size: 18, font: '標楷體' })] })
     })
 
     const doc = new Document({
@@ -1010,6 +1025,7 @@ export default function ReportsPage() {
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
           new Paragraph({ children: [new TextRun({ text: '網路資安設備停止服務彙總列表', bold: true, size: 24, font: '標楷體' })] }),
           new Table({ rows: mRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
+          ...mFootnotes,
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
           new Paragraph({ children: [new TextRun({ text: '各設備類型季報', bold: true, size: 24, font: '標楷體' })] }),
           new Table({ rows: qRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
@@ -1682,25 +1698,57 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {monthlySummary.map((row) => (
+                      {monthlySummary.map((row) => {
+                        const pNotes = notesByGroupPeriodPlanned.get(`${row.label}|${currentPeriodIndex}`)
+                        const pLabel = pNotes ? (pNotes.length === 1 ? `【註${pNotes[0]}】` : `【註${pNotes[0]}~註${pNotes[pNotes.length - 1]}】`) : ''
+                        const uNotes = notesByGroupPeriodUnplanned.get(`${row.label}|${currentPeriodIndex}`)
+                        const uLabel = uNotes ? (uNotes.length === 1 ? `【註${uNotes[0]}】` : `【註${uNotes[0]}~註${uNotes[uNotes.length - 1]}】`) : ''
+                        return (
                         <tr key={row.label} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                           <td className="px-4 py-3 font-medium">{row.label}</td>
                           <td className="text-right px-4 py-3 font-mono text-xs">
                             {row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : row.hoursPerDevice}
                           </td>
-                          <td className="text-right px-4 py-3 text-[var(--color-warning)]">{row.plannedHours}</td>
-                          <td className="text-right px-4 py-3 text-[var(--color-danger)]">{row.unplannedHours}</td>
+                          <td className="text-right px-4 py-3 text-[var(--color-warning)]">
+                            {row.plannedHours}
+                            {pLabel && <><br/><span className="text-xs text-[var(--color-text-muted)]">{pLabel}</span></>}
+                          </td>
+                          <td className="text-right px-4 py-3 text-[var(--color-danger)]">
+                            {row.unplannedHours}
+                            {uLabel && <><br/><span className="text-xs text-[var(--color-text-muted)]">{uLabel}</span></>}
+                          </td>
                           <td className="text-right px-4 py-3">
                             <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                               {row.availabilityPct}%
                             </span>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
               </div>
+
+              {/* ═══ 彙總列表註腳 ═══ */}
+              {(() => {
+                const monthNoteIndices = new Set<number>()
+                monthlySummary.forEach((row) => {
+                  const pN = notesByGroupPeriodPlanned.get(`${row.label}|${currentPeriodIndex}`)
+                  const uN = notesByGroupPeriodUnplanned.get(`${row.label}|${currentPeriodIndex}`)
+                  pN?.forEach((n) => monthNoteIndices.add(n))
+                  uN?.forEach((n) => monthNoteIndices.add(n))
+                })
+                const sorted = Array.from(monthNoteIndices).sort((a, b) => a - b)
+                if (sorted.length === 0) return null
+                return (
+                  <div className="mb-6 px-2 text-xs text-[var(--color-text-muted)] space-y-0.5">
+                    {sorted.map((num) => {
+                      const note = quarterEventNotes[num - 1]
+                      return <div key={num}>※【註{num}】{note.date} {note.unit}-{note.title}（{note.planType}）</div>
+                    })}
+                  </div>
+                )
+              })()}
 
               {/* ═══ 表2: 各設備類型季報 ═══ */}
               <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
@@ -1732,10 +1780,7 @@ export default function ReportsPage() {
                         const groupNoteLabel = groupNotes ? (groupNotes.length === 1 ? `【註${groupNotes[0]}】` : `【註${groupNotes[0]}~註${groupNotes[groupNotes.length - 1]}】`) : ''
                         return (
                         <React.Fragment key={device.label}>
-                          {device.monthRows.map((row, i) => {
-                            const periodNotes = notesByGroupPeriod.get(`${device.label}|${i}`)
-                            const pNoteLabel = periodNotes ? (periodNotes.length === 1 ? `【註${periodNotes[0]}】` : `【註${periodNotes[0]}~註${periodNotes[periodNotes.length - 1]}】`) : ''
-                            return (
+                          {device.monthRows.map((row, i) => (
                             <tr key={`${device.label}-${i}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                               {i === 0 && (
                                 <td className="px-4 py-2.5 font-medium align-middle border-r border-[var(--color-border)]" rowSpan={4}>
@@ -1750,7 +1795,6 @@ export default function ReportsPage() {
                               </td>
                               <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">
                                 {row.hasData ? row.plannedHours : ''}
-                                {pNoteLabel && <><br/><span className="text-xs text-[var(--color-text-muted)]">{pNoteLabel}</span></>}
                               </td>
                               <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">
                                 {row.hasData ? row.unplannedHours : ''}
@@ -1763,7 +1807,7 @@ export default function ReportsPage() {
                                 ) : ''}
                               </td>
                             </tr>
-                          )})}
+                          ))}
                           {/* Quarterly total row */}
                           <tr className="border-b-2 border-[var(--color-border)] bg-[var(--color-warning-dim)]">
                             <td className="px-4 py-2.5 text-xs font-semibold">
