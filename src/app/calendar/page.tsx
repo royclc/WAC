@@ -307,6 +307,8 @@ export default function CalendarPage() {
             onEventClick={(event) => {
               if (events.find((e) => e.id === event.id)) {
                 openEditEvent(event.id)
+              } else if (leaves.find((l) => l.id === event.id)) {
+                openEditLeave(event.id)
               }
             }}
             selectedDate={selectedDate}
@@ -439,9 +441,23 @@ export default function CalendarPage() {
             <label className="block text-sm font-medium mb-1">日期 *</label>
             <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" />
           </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="allday" checked={formAllDay} onChange={(e) => setFormAllDay(e.target.checked)} className="rounded" />
-            <label htmlFor="allday" className="text-sm">全天</label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formAllDay} onChange={(e) => { setFormAllDay(e.target.checked); if (e.target.checked) { setFormStartTime('00:00'); setFormEndTime('23:59') } }} className="rounded" />
+              全天
+            </label>
+            {!formAllDay && (
+              <>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={formStartTime === '08:30' && formEndTime === '12:00'} onChange={(e) => { if (e.target.checked) { setFormStartTime('08:30'); setFormEndTime('12:00') } }} className="rounded" />
+                  上午
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={formStartTime === '13:30' && formEndTime === '17:30'} onChange={(e) => { if (e.target.checked) { setFormStartTime('13:30'); setFormEndTime('17:30') } }} className="rounded" />
+                  下午
+                </label>
+              </>
+            )}
           </div>
           {!formAllDay && (
             <div className="grid grid-cols-2 gap-3">

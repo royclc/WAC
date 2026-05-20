@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, AlertTriangle, CheckCircle, Loader2, Trash2 } from 'lucide-react'
 import Modal from './Modal'
 import YearMonthPicker from './YearMonthPicker'
 import { supabase } from '@/lib/supabase'
@@ -14,6 +14,7 @@ import {
   addMonths,
   subMonths,
   format,
+  parseLocalDate,
   WEEKDAYS,
 } from '@/lib/calendar-utils'
 
@@ -102,8 +103,8 @@ function calcStats(
   assets.forEach((asset) => {
     events.filter((e) => e.asset_id === asset.id).forEach((e) => {
       eventCount++
-      const eStart = new Date(e.start_time)
-      const eEnd = new Date(e.end_time)
+      const eStart = parseLocalDate(e.start_time)
+      const eEnd = parseLocalDate(e.end_time)
       const s = eStart < monthStart ? monthStart : eStart
       const ed = eEnd > monthEnd ? monthEnd : eEnd
       if (ed > s) {
@@ -312,8 +313,8 @@ export default function NetworkAvailabilityCalendar() {
         let plannedMins = 0
         let unplannedMins = 0
         assetEvents.forEach((e) => {
-          const eStart = new Date(e.start_time)
-          const eEnd = new Date(e.end_time)
+          const eStart = parseLocalDate(e.start_time)
+          const eEnd = parseLocalDate(e.end_time)
           const s = eStart < monthStart ? monthStart : eStart
           const ed = eEnd > monthEnd ? monthEnd : eEnd
           if (ed > s) {
@@ -344,8 +345,8 @@ export default function NetworkAvailabilityCalendar() {
         let plannedMins = 0
         let unplannedMins = 0
         cEvents.forEach((e) => {
-          const eStart = new Date(e.start_time)
-          const eEnd = new Date(e.end_time)
+          const eStart = parseLocalDate(e.start_time)
+          const eEnd = parseLocalDate(e.end_time)
           const s = eStart < monthStart ? monthStart : eStart
           const ed = eEnd > monthEnd ? monthEnd : eEnd
           if (ed > s) {
@@ -398,8 +399,8 @@ export default function NetworkAvailabilityCalendar() {
     setFormPlanType(first.plan_type)
     setFormTitle(first.title)
     setFormDesc('description' in first ? first.description : '')
-    setFormStart(first.start_time.includes('T') ? first.start_time.slice(0, 16) : first.start_time)
-    setFormEnd(first.end_time.includes('T') ? first.end_time.slice(0, 16) : first.end_time)
+    setFormStart(format(parseLocalDate(first.start_time), "yyyy-MM-dd'T'HH:mm"))
+    setFormEnd(format(parseLocalDate(first.end_time), "yyyy-MM-dd'T'HH:mm"))
     setShowModal(true)
   }
 
@@ -407,7 +408,8 @@ export default function NetworkAvailabilityCalendar() {
     const hasAssets = formSelectedAssets.length > 0
     const hasCircuits = formSelectedCircuits.length > 0
     if (!hasAssets && !hasCircuits) return
-    if (!formTitle || !formStart || !formEnd) return
+    const effectiveTitle = formTitle || formEventType
+    if (!effectiveTitle || !formStart || !formEnd) return
     setSaving(true)
 
     const isEditing = editingIds.length > 0 || editingCircuitIds.length > 0
@@ -429,7 +431,7 @@ export default function NetworkAvailabilityCalendar() {
         return {
           asset_type: 'network', asset_id: assetId, asset_name: asset?.name || '',
           event_type: formEventType, plan_type: formPlanType,
-          title: formTitle, description: formDesc, start_time: formStart, end_time: formEnd,
+          title: effectiveTitle, description: formDesc, start_time: formStart, end_time: formEnd,
         }
       })
       const { error } = await supabase.from('downtime_events').insert(rows)
@@ -452,6 +454,8 @@ export default function NetworkAvailabilityCalendar() {
 
   // Delete a group of device + circuit events
   async function deleteEventGroup(deviceIds: string[], circuitIds: string[]) {
+    const total = deviceIds.length + circuitIds.length
+    if (!window.confirm(`確定要刪除此事件？（共 ${total} 筆）`)) return
     if (deviceIds.length > 0) {
       const { error } = await supabase.from('downtime_events').delete().in('id', deviceIds)
       if (error) { console.error(error); return }
@@ -461,6 +465,7 @@ export default function NetworkAvailabilityCalendar() {
       if (error) { console.error(error); return }
     }
     await Promise.all([fetchDowntimeEvents(), fetchCircuitEvents()])
+    setShowModal(false)
     setSelectedDate(null)
   }
 
@@ -559,24 +564,44 @@ export default function NetworkAvailabilityCalendar() {
                   <div className="space-y-0.5">
                     {(() => {
                       // 以單位為主顯示，合併設備事件與線路事件
-                      const unitMap = new Map<string, EventPlanType>()
+                      const unitMap = new Map<string, { planType: EventPlanType; devEvts: DowntimeEvent[]; cirEvts: CircuitEvent[] }>()
                       dayEvents.forEach((e) => {
                         const asset = networkAssets.find((a) => a.id === e.asset_id)
                         const unitName = asset?.unit || '未知'
-                        const existing = unitMap.get(unitName)
-                        if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
+                        if (!unitMap.has(unitName)) unitMap.set(unitName, { planType: e.plan_type, devEvts: [], cirEvts: [] })
+                        const entry = unitMap.get(unitName)!
+                        entry.devEvts.push(e)
+                        if (e.plan_type === 'unplanned') entry.planType = 'unplanned'
                       })
                       dayCircuitEvts.forEach((e) => {
                         const circuit = circuits.find((c) => c.id === e.circuit_id)
                         const unitName = circuit?.unit || '未知'
-                        const existing = unitMap.get(unitName)
-                        if (!existing || e.plan_type === 'unplanned') unitMap.set(unitName, e.plan_type)
+                        if (!unitMap.has(unitName)) unitMap.set(unitName, { planType: e.plan_type, devEvts: [], cirEvts: [] })
+                        const entry = unitMap.get(unitName)!
+                        entry.cirEvts.push(e)
+                        if (e.plan_type === 'unplanned') entry.planType = 'unplanned'
                       })
                       const unitEntries = [...unitMap.entries()]
+
+                      function handleUnitClick(ev: React.MouseEvent, unitName: string, devEvts: DowntimeEvent[], cirEvts: CircuitEvent[]) {
+                        ev.stopPropagation()
+                        // 按 signature 分群，若只有一群直接開 Modal，多群開 sidebar
+                        const nt = (t: string) => format(parseLocalDate(t), "yyyy-MM-dd'T'HH:mm")
+                        const sigSet = new Set<string>()
+                        devEvts.forEach((e) => sigSet.add(`${nt(e.start_time)}|${nt(e.end_time)}|${e.plan_type}`))
+                        cirEvts.forEach((e) => sigSet.add(`${nt(e.start_time)}|${nt(e.end_time)}|${e.plan_type}`))
+                        if (sigSet.size === 1) {
+                          openEditEventGroup(devEvts, cirEvts, unitName)
+                        } else {
+                          setSelectedDate(date)
+                        }
+                      }
+
                       return (
                         <>
-                          {unitEntries.slice(0, 2).map(([unit, planType]) => (
-                            <div key={unit} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[planType] }}>{unit}</div>
+                          {unitEntries.slice(0, 2).map(([unit, { planType, devEvts, cirEvts }]) => (
+                            <div key={unit} onClick={(ev) => handleUnitClick(ev, unit, devEvts, cirEvts)}
+                              className="text-xs px-1 py-0.5 rounded truncate text-white cursor-pointer hover:opacity-80" style={{ backgroundColor: PLAN_TYPE_COLORS[planType] }}>{unit}</div>
                           ))}
                           {unitEntries.length > 2 && <div className="text-xs text-[var(--color-text-muted)] px-1">+{unitEntries.length - 2}</div>}
                         </>
@@ -795,20 +820,20 @@ export default function NetworkAvailabilityCalendar() {
 
           // Device events in quarter
           const quarterDeviceEvents = events.filter((e) => {
-            const eStart = new Date(e.start_time)
-            const eEnd = new Date(e.end_time)
+            const eStart = parseLocalDate(e.start_time)
+            const eEnd = parseLocalDate(e.end_time)
             return eStart <= qEnd && eEnd >= qStart
           })
 
           // Circuit events in quarter
           const quarterCircuitEvents = circuitEvents.filter((e) => {
-            const eStart = new Date(e.start_time)
-            const eEnd = new Date(e.end_time)
+            const eStart = parseLocalDate(e.start_time)
+            const eEnd = parseLocalDate(e.end_time)
             return eStart <= qEnd && eEnd >= qStart
           })
 
           function formatROCDateTime(dtStr: string) {
-            const dt = new Date(dtStr)
+            const dt = parseLocalDate(dtStr)
             const mm = String(dt.getMonth() + 1).padStart(2, '0')
             const dd = String(dt.getDate()).padStart(2, '0')
             const hh = String(dt.getHours()).padStart(2, '0')
@@ -840,7 +865,7 @@ export default function NetworkAvailabilityCalendar() {
                   </thead>
                   <tbody>
                     {quarterDeviceEvents.map((e) => {
-                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
+                      const stopHours = Number(((parseLocalDate(e.end_time).getTime() - parseLocalDate(e.start_time).getTime()) / 3600000).toFixed(2))
                       return (
                       <tr key={`d-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                         <td className="px-4 py-3">
@@ -861,7 +886,7 @@ export default function NetworkAvailabilityCalendar() {
                     })}
                     {quarterCircuitEvents.map((e) => {
                       const circuit = circuits.find((c) => c.id === e.circuit_id)
-                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
+                      const stopHours = Number(((parseLocalDate(e.end_time).getTime() - parseLocalDate(e.start_time).getTime()) / 3600000).toFixed(2))
                       return (
                         <tr key={`c-${e.id}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                           <td className="px-4 py-3">
@@ -899,14 +924,15 @@ export default function NetworkAvailabilityCalendar() {
           ) : (
             <div className="space-y-3">
               {(() => {
-                // Group by unit + event signature (title + start + end + plan_type)
+                // Group by unit + normalized start/end + plan_type (不含 title，避免設備與線路 title 不同導致分群)
                 interface UnitEventGroup { unit: string; deviceEvents: DowntimeEvent[]; circuitEvts: CircuitEvent[]; key: string }
                 const groupMap = new Map<string, UnitEventGroup>()
+                const normTime = (t: string) => format(parseLocalDate(t), "yyyy-MM-dd'T'HH:mm")
 
                 selectedDayEvents.forEach((e) => {
                   const asset = networkAssets.find((a) => a.id === e.asset_id)
                   const unitName = asset?.unit || '未知'
-                  const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+                  const sig = `${unitName}|${normTime(e.start_time)}|${normTime(e.end_time)}|${e.plan_type}`
                   if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, deviceEvents: [], circuitEvts: [], key: sig })
                   groupMap.get(sig)!.deviceEvents.push(e)
                 })
@@ -914,7 +940,7 @@ export default function NetworkAvailabilityCalendar() {
                 selectedDayCircuitEvents.forEach((e) => {
                   const circuit = circuits.find((c) => c.id === e.circuit_id)
                   const unitName = circuit?.unit || '未知'
-                  const sig = `${unitName}|${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+                  const sig = `${unitName}|${normTime(e.start_time)}|${normTime(e.end_time)}|${e.plan_type}`
                   if (!groupMap.has(sig)) groupMap.set(sig, { unit: unitName, deviceEvents: [], circuitEvts: [], key: sig })
                   groupMap.get(sig)!.circuitEvts.push(e)
                 })
@@ -943,7 +969,7 @@ export default function NetworkAvailabilityCalendar() {
                           </div>
                         </div>
                         <div className="font-medium text-sm mt-1">{first.title}</div>
-                        <div className="text-xs text-[var(--color-text-muted)] mt-1">{format(new Date(first.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(first.end_time), 'yyyy/MM/dd HH:mm')}</div>
+                        <div className="text-xs text-[var(--color-text-muted)] mt-1">{format(parseLocalDate(first.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(parseLocalDate(first.end_time), 'yyyy/MM/dd HH:mm')}</div>
                         {'description' in first && first.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{first.description}</div>}
                       </div>
                     </div>
@@ -1113,7 +1139,7 @@ export default function NetworkAvailabilityCalendar() {
           {/* 事件類型 */}
           <div>
             <label className="block text-sm font-medium mb-1">事件類型 *</label>
-            <select value={formEventType} onChange={(e) => setFormEventType(e.target.value)}
+            <select value={formEventType} onChange={(e) => { const v = e.target.value; if (!formTitle || EVENT_TYPE_OPTIONS.includes(formTitle)) setFormTitle(v); setFormEventType(v) }}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
               {EVENT_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -1134,6 +1160,20 @@ export default function NetworkAvailabilityCalendar() {
             <label className="block text-sm font-medium mb-1">事件標題 *</label>
             <input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
+          <div className="flex items-center gap-4 mb-1">
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formStart.endsWith('T00:00') && formEnd.endsWith('T23:59')} onChange={(e) => { if (e.target.checked) { const d = formStart.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'); setFormStart(`${d}T00:00`); setFormEnd(`${d}T23:59`) } }} className="rounded" />
+              全天
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formStart.endsWith('T08:30') && formEnd.endsWith('T12:00')} onChange={(e) => { if (e.target.checked) { const d = formStart.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'); setFormStart(`${d}T08:30`); setFormEnd(`${d}T12:00`) } }} className="rounded" />
+              上午
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formStart.endsWith('T13:30') && formEnd.endsWith('T17:30')} onChange={(e) => { if (e.target.checked) { const d = formStart.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'); setFormStart(`${d}T13:30`); setFormEnd(`${d}T17:30`) } }} className="rounded" />
+              下午
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">開始時間 *</label>
@@ -1148,7 +1188,13 @@ export default function NetworkAvailabilityCalendar() {
             <label className="block text-sm font-medium mb-1">說明</label>
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex gap-2 pt-2">
+            {(editingIds.length > 0 || editingCircuitIds.length > 0) && (
+              <button onClick={() => deleteEventGroup(editingIds, editingCircuitIds.length > 0 ? editingCircuitIds : [])} disabled={saving} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} 刪除
+              </button>
+            )}
+            <div className="flex-1" />
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-table-header)]">取消</button>
             <button onClick={saveEvent} disabled={(formSelectedAssets.length === 0 && formSelectedCircuits.length === 0) || saving}
               className={`px-4 py-2 text-sm rounded-lg flex items-center gap-1 ${(formSelectedAssets.length > 0 || formSelectedCircuits.length > 0) && !saving ? 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]' : 'bg-[var(--color-border)] text-[var(--color-text-dim)] cursor-not-allowed'}`}>

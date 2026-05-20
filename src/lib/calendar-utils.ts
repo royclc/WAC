@@ -34,4 +34,18 @@ export function getMonthHours(year: number, month: number): number {
   return getDaysInMonth(new Date(year, month - 1)) * 24
 }
 
+/**
+ * 將 TIMESTAMPTZ 字串解析為本地 Date，忽略時區偏移。
+ * 例如 "2026-05-19T08:30:00+00:00" → 視為 2026-05-19 08:30 本地時間
+ */
+export function parseLocalDate(dtStr: string): Date {
+  // 取前 16 碼 "yyyy-MM-ddTHH:mm" 或處理空格分隔
+  const s = dtStr.replace(' ', 'T').slice(0, 16)
+  const [datePart, timePart] = s.split('T')
+  const [y, m, d] = datePart.split('-').map(Number)
+  if (!timePart) return new Date(y, m - 1, d)
+  const [hh, mm] = timePart.split(':').map(Number)
+  return new Date(y, m - 1, d, hh, mm)
+}
+
 export { format, isSameMonth, isSameDay, isToday, addMonths, subMonths, zhTW }

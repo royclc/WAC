@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, CheckCircle, Loader2, Trash2 } from 'lucide-react'
 import Modal from './Modal'
 import YearMonthPicker from './YearMonthPicker'
 import { supabase } from '@/lib/supabase'
@@ -14,6 +14,7 @@ import {
   addMonths,
   subMonths,
   format,
+  parseLocalDate,
   WEEKDAYS,
 } from '@/lib/calendar-utils'
 import type { AssetType } from '@/types/database'
@@ -187,8 +188,8 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
       const monthEnd = new Date(year, month + 1, 1)
 
       assetEvents.forEach((e) => {
-        const eStart = new Date(e.start_time)
-        const eEnd = new Date(e.end_time)
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
         const effectiveStart = eStart < monthStart ? monthStart : eStart
         const effectiveEnd = eEnd > monthEnd ? monthEnd : eEnd
         if (effectiveEnd > effectiveStart) {
@@ -229,8 +230,8 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     setFormPlanType((e.plan_type as EventPlanType) || 'unplanned')
     setFormTitle(e.title)
     setFormDesc(e.description)
-    setFormStart(e.start_time.includes('T') ? e.start_time.slice(0, 16) : e.start_time)
-    setFormEnd(e.end_time.includes('T') ? e.end_time.slice(0, 16) : e.end_time)
+    setFormStart(format(parseLocalDate(e.start_time), "yyyy-MM-dd'T'HH:mm"))
+    setFormEnd(format(parseLocalDate(e.end_time), "yyyy-MM-dd'T'HH:mm"))
     setShowModal(true)
   }
 
@@ -270,9 +271,11 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
   }
 
   async function deleteEvent(id: string) {
+    if (!window.confirm('確定要刪除此事件？')) return
     const { error } = await supabase.from('downtime_events').delete().eq('id', id)
     if (!error) {
       await fetchEvents()
+      setShowModal(false)
       setSelectedDate(null)
     }
   }
@@ -351,7 +354,8 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   </div>
                   <div className="space-y-0.5">
                     {dayEvents.slice(0, 2).map((e) => (
-                      <div key={e.id} className="text-xs px-1 py-0.5 rounded truncate text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[(e.plan_type as EventPlanType) || 'unplanned'] }}>
+                      <div key={e.id} onClick={(ev) => { ev.stopPropagation(); openEditEvent(e) }}
+                        className="text-xs px-1 py-0.5 rounded truncate text-white cursor-pointer hover:opacity-80" style={{ backgroundColor: PLAN_TYPE_COLORS[(e.plan_type as EventPlanType) || 'unplanned'] }}>
                         {e.asset_name}
                       </div>
                     ))}
@@ -448,13 +452,13 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           const { start: qStart, end: qEnd, rocYear, quarter } = getQuarterRange(currentMonth)
 
           const quarterEvents = events.filter((e) => {
-            const eStart = new Date(e.start_time)
-            const eEnd = new Date(e.end_time)
+            const eStart = parseLocalDate(e.start_time)
+            const eEnd = parseLocalDate(e.end_time)
             return eStart <= qEnd && eEnd >= qStart
           })
 
           function formatROCDateTime(dtStr: string) {
-            const d = new Date(dtStr)
+            const d = parseLocalDate(dtStr)
             const mm = String(d.getMonth() + 1).padStart(2, '0')
             const dd = String(d.getDate()).padStart(2, '0')
             const hh = String(d.getHours()).padStart(2, '0')
@@ -484,7 +488,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   </thead>
                   <tbody>
                     {quarterEvents.map((e) => {
-                      const stopHours = Number(((new Date(e.end_time).getTime() - new Date(e.start_time).getTime()) / 3600000).toFixed(2))
+                      const stopHours = Number(((parseLocalDate(e.end_time).getTime() - parseLocalDate(e.start_time).getTime()) / 3600000).toFixed(2))
                       return (
                       <tr key={e.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
                         <td className="px-4 py-3">
@@ -542,7 +546,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                   <div className="font-medium text-sm mt-1">{e.title}</div>
                   <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.asset_name}</div>
                   <div className="text-xs text-[var(--color-text-muted)]">
-                    {format(new Date(e.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(new Date(e.end_time), 'yyyy/MM/dd HH:mm')}
+                    {format(parseLocalDate(e.start_time), 'yyyy/MM/dd HH:mm')} ~ {format(parseLocalDate(e.end_time), 'yyyy/MM/dd HH:mm')}
                   </div>
                   {e.description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{e.description}</div>}
                 </div>
@@ -603,6 +607,20 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
             <label className="block text-sm font-medium mb-1">事件標題 *</label>
             <input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
+          <div className="flex items-center gap-4 mb-1">
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formStart.endsWith('T00:00') && formEnd.endsWith('T23:59')} onChange={(e) => { if (e.target.checked) { const d = formStart.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'); setFormStart(`${d}T00:00`); setFormEnd(`${d}T23:59`) } }} className="rounded" />
+              全天
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formStart.endsWith('T08:30') && formEnd.endsWith('T12:00')} onChange={(e) => { if (e.target.checked) { const d = formStart.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'); setFormStart(`${d}T08:30`); setFormEnd(`${d}T12:00`) } }} className="rounded" />
+              上午
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={formStart.endsWith('T13:30') && formEnd.endsWith('T17:30')} onChange={(e) => { if (e.target.checked) { const d = formStart.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'); setFormStart(`${d}T13:30`); setFormEnd(`${d}T17:30`) } }} className="rounded" />
+              下午
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">開始時間 *</label>
@@ -617,7 +635,13 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
             <label className="block text-sm font-medium mb-1">說明</label>
             <textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex gap-2 pt-2">
+            {editingId && (
+              <button onClick={() => deleteEvent(editingId)} disabled={saving} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1 disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} 刪除
+              </button>
+            )}
+            <div className="flex-1" />
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
             <button onClick={saveEvent} disabled={saving} className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] disabled:opacity-50 flex items-center gap-1">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
