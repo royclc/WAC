@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgrest
+  namespace: mac-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgrest
+  template:
+    metadata:
+      labels:
+        app: postgrest
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - "until pg_isready -h postgres -U postgres; do echo 'waiting for postgres...'; sleep 2; done"
+      containers:
+        - name: postgrest
+          image: postgrest/postgrest:v12.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PGRST_DB_URI
+              value: "postgres://authenticator:mysecretpassword@postgres:5432/mac_system"
+            - name: PGRST_DB_SCHEMAS
+              value: "api"
+            - name: PGRST_DB_ANON_ROLE
+              value: "anon"
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mac-secrets
+                  key: PGRST_JWT_SECRET
+            - name: PGRST_OPENAPI_SERVER_PROXY_URI
+              value: "http://localhost:3001"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgrest
+  namespace: mac-system
+spec:
+  selector:
+    app: postgrest
+  ports:
+    - port: 3001
+      targetPort: 3000

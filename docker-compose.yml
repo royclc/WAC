@@ -31,7 +31,7 @@ services:
       PGRST_DB_URI: postgres://authenticator:mysecretpassword@postgres:5432/mac_system
       PGRST_DB_SCHEMAS: api
       PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: super-secret-jwt-token-for-local-dev-only-32chars!!
+      PGRST_JWT_SECRET: "super-secret-jwt-token-for-local-dev-only-32chars!!"
       PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost:3001
     depends_on:
       postgres:
