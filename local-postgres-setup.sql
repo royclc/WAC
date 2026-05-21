@@ -11,20 +11,15 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ============================================
--- Schema: api (PostgREST 使用)
--- ============================================
-CREATE SCHEMA IF NOT EXISTS api;
-
 -- 設定搜尋路徑
-SET search_path TO api, public;
+SET search_path TO public;
 
 -- ============================================
 -- Tables
 -- ============================================
 
 -- ── 廠商 ──
-CREATE TABLE IF NOT EXISTS api.vendors (
+CREATE TABLE IF NOT EXISTS public.vendors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   contact_person TEXT DEFAULT '',
@@ -35,7 +30,7 @@ CREATE TABLE IF NOT EXISTS api.vendors (
 );
 
 -- ── 硬體類別 ──
-CREATE TABLE IF NOT EXISTS api.hardware_categories (
+CREATE TABLE IF NOT EXISTS public.hardware_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL UNIQUE,
   label TEXT NOT NULL,
@@ -44,15 +39,15 @@ CREATE TABLE IF NOT EXISTS api.hardware_categories (
 );
 
 -- ── 硬體型號 ──
-CREATE TABLE IF NOT EXISTS api.hardware_models (
+CREATE TABLE IF NOT EXISTS public.hardware_models (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category_id UUID NOT NULL REFERENCES api.hardware_categories(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES public.hardware_categories(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ── 硬體資產 ──
-CREATE TABLE IF NOT EXISTS api.hardware_assets (
+CREATE TABLE IF NOT EXISTS public.hardware_assets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   category_key TEXT NOT NULL,
@@ -66,7 +61,7 @@ CREATE TABLE IF NOT EXISTS api.hardware_assets (
 );
 
 -- ── 保養類別 ──
-CREATE TABLE IF NOT EXISTS api.maintenance_categories (
+CREATE TABLE IF NOT EXISTS public.maintenance_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL UNIQUE,
   label TEXT NOT NULL,
@@ -76,7 +71,7 @@ CREATE TABLE IF NOT EXISTS api.maintenance_categories (
 );
 
 -- ── 保養記錄 ──
-CREATE TABLE IF NOT EXISTS api.maintenance_events (
+CREATE TABLE IF NOT EXISTS public.maintenance_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   category_key TEXT NOT NULL,
   title TEXT NOT NULL,
@@ -88,7 +83,7 @@ CREATE TABLE IF NOT EXISTS api.maintenance_events (
 );
 
 -- ── 單位(組織) ──
-CREATE TABLE IF NOT EXISTS api.organizations (
+CREATE TABLE IF NOT EXISTS public.organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('headquarters', 'branch', 'office')),
@@ -96,9 +91,9 @@ CREATE TABLE IF NOT EXISTS api.organizations (
 );
 
 -- ── 單位設備 ──
-CREATE TABLE IF NOT EXISTS api.org_devices (
+CREATE TABLE IF NOT EXISTS public.org_devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES api.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   zone TEXT NOT NULL CHECK (zone IN ('internal', 'external')),
   device_type TEXT NOT NULL,
@@ -108,9 +103,9 @@ CREATE TABLE IF NOT EXISTS api.org_devices (
 );
 
 -- ── 單位電路 ──
-CREATE TABLE IF NOT EXISTS api.org_circuits (
+CREATE TABLE IF NOT EXISTS public.org_circuits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES api.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   circuit_number TEXT NOT NULL,
   bandwidth TEXT DEFAULT '',
   ip_address TEXT DEFAULT '',
@@ -118,7 +113,7 @@ CREATE TABLE IF NOT EXISTS api.org_circuits (
 );
 
 -- ── 事件類型 ──
-CREATE TABLE IF NOT EXISTS api.event_types (
+CREATE TABLE IF NOT EXISTS public.event_types (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   color TEXT DEFAULT '#3B82F6',
@@ -127,7 +122,7 @@ CREATE TABLE IF NOT EXISTS api.event_types (
 );
 
 -- ── 使用者 ──
-CREATE TABLE IF NOT EXISTS api.users (
+CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
@@ -138,7 +133,7 @@ CREATE TABLE IF NOT EXISTS api.users (
 );
 
 -- ── 線路管理 ──
-CREATE TABLE IF NOT EXISTS api.circuits (
+CREATE TABLE IF NOT EXISTS public.circuits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   circuit_number TEXT NOT NULL,
   bandwidth TEXT DEFAULT '',
@@ -151,7 +146,7 @@ CREATE TABLE IF NOT EXISTS api.circuits (
 );
 
 -- ── 工作事件（月曆） ──
-CREATE TABLE IF NOT EXISTS api.work_events (
+CREATE TABLE IF NOT EXISTS public.work_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
@@ -165,7 +160,7 @@ CREATE TABLE IF NOT EXISTS api.work_events (
 );
 
 -- ── 請假記錄 ──
-CREATE TABLE IF NOT EXISTS api.leave_records (
+CREATE TABLE IF NOT EXISTS public.leave_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_name TEXT NOT NULL,
   leave_type TEXT NOT NULL DEFAULT 'annual',
@@ -177,7 +172,7 @@ CREATE TABLE IF NOT EXISTS api.leave_records (
 );
 
 -- ── 停機事件 ──
-CREATE TABLE IF NOT EXISTS api.downtime_events (
+CREATE TABLE IF NOT EXISTS public.downtime_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   asset_type TEXT NOT NULL DEFAULT 'server',
   asset_id UUID NOT NULL,
@@ -192,7 +187,7 @@ CREATE TABLE IF NOT EXISTS api.downtime_events (
 );
 
 -- ── 線路停機事件 ──
-CREATE TABLE IF NOT EXISTS api.circuit_events (
+CREATE TABLE IF NOT EXISTS public.circuit_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   circuit_id UUID NOT NULL,
   plan_type TEXT NOT NULL DEFAULT 'unplanned',
@@ -206,12 +201,12 @@ CREATE TABLE IF NOT EXISTS api.circuit_events (
 -- ============================================
 -- 登入驗證 Function
 -- ============================================
-CREATE OR REPLACE FUNCTION api.verify_password(user_email TEXT, user_password TEXT)
+CREATE OR REPLACE FUNCTION public.verify_password(user_email TEXT, user_password TEXT)
 RETURNS TABLE(id UUID, name TEXT, email TEXT, role TEXT) AS $$
 BEGIN
   RETURN QUERY
   SELECT u.id, u.name, u.email, u.role
-  FROM api.users u
+  FROM public.users u
   WHERE u.email = user_email
     AND u.password_hash = crypt(user_password, u.password_hash)
     AND u.is_active = true;
@@ -235,10 +230,10 @@ END
 $$;
 
 GRANT anon TO authenticator;
-GRANT USAGE ON SCHEMA api TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA api TO anon;
-ALTER DEFAULT PRIVILEGES IN SCHEMA api GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon;
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon;
 
 -- 允許呼叫 function
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA api TO anon;
-ALTER DEFAULT PRIVILEGES IN SCHEMA api GRANT EXECUTE ON FUNCTIONS TO anon;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO anon;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon;

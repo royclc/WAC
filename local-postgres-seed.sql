@@ -2,7 +2,7 @@
 -- MAC System - Local PostgreSQL Seed Data
 -- ============================================
 
-SET search_path TO api, public;
+SET search_path TO public;
 
 -- 清空所有表
 TRUNCATE TABLE circuit_events, downtime_events, leave_records, work_events,
