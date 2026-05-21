@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS api.work_events (
   is_all_day BOOLEAN DEFAULT false,
   color TEXT DEFAULT '#3B82F6',
   assignees TEXT DEFAULT '',
+  vendor TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
