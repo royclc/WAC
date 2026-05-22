@@ -49,6 +49,11 @@ export default function MaintenanceCategoriesPage() {
 
   async function save() {
     if (!formLabel.trim() || !formKey.trim()) return
+    const dupQuery = supabase.from('maintenance_categories').select('id').eq('key', formKey.trim())
+    if (editing) dupQuery.neq('id', editing.id)
+    const { data: dup } = await dupQuery.limit(1)
+    if (dup && dup.length > 0) { alert(`類別代碼「${formKey.trim()}」已存在`); return }
+
     setSaving(true)
     const payload = { key: formKey.trim(), label: formLabel.trim(), color: formColor }
     if (editing) {

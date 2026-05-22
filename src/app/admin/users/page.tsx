@@ -47,6 +47,11 @@ export default function UsersPage() {
 
   async function saveUser() {
     if (!formName || !formEmail) return
+    const dupQuery = supabase.from('users').select('id').eq('email', formEmail.trim())
+    if (editingUser) dupQuery.neq('id', editingUser.id)
+    const { data: dup } = await dupQuery.limit(1)
+    if (dup && dup.length > 0) { alert(`Email「${formEmail}」已存在`); return }
+
     setSaving(true)
     const payload = { name: formName, email: formEmail, role: formRole }
     if (editingUser) {
