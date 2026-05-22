@@ -204,6 +204,46 @@ CREATE TABLE IF NOT EXISTS api.circuit_events (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- ── VM 虛擬機 ──
+CREATE TABLE IF NOT EXISTS api.vm_instances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  network_zone TEXT NOT NULL DEFAULT '內網',
+  hostname TEXT NOT NULL,
+  ip_address TEXT DEFAULT '',
+  os_name TEXT DEFAULT '',
+  os_version TEXT DEFAULT '',
+  area TEXT DEFAULT '管理區',
+  service_group TEXT DEFAULT '',
+  service_name TEXT DEFAULT '',
+  software TEXT DEFAULT '',
+  cpu_cores INT DEFAULT 4,
+  ram_gb INT DEFAULT 8,
+  disk1_gb TEXT DEFAULT '',
+  disk2_gb TEXT DEFAULT '',
+  disk3_gb TEXT DEFAULT '',
+  note TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── 服務變動記錄 ──
+CREATE TABLE IF NOT EXISTS api.service_changes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category TEXT NOT NULL,
+  change_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  platform TEXT DEFAULT '',
+  version TEXT DEFAULT '',
+  change_type TEXT DEFAULT '',
+  description TEXT DEFAULT '',
+  description_custom TEXT DEFAULT '',
+  host_names TEXT DEFAULT '',
+  ticket_no TEXT DEFAULT '',
+  directions TEXT DEFAULT '',
+  purpose TEXT DEFAULT '',
+  is_reviewed BOOLEAN DEFAULT false,
+  note TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ============================================
 -- 登入驗證 Function
 -- ============================================
