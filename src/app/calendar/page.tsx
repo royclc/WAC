@@ -19,6 +19,7 @@ interface LocalWorkEvent {
   is_all_day: boolean
   color: string
   assignees: string[]
+  vendor: string
 }
 
 interface LocalLeave {
@@ -52,6 +53,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<LocalWorkEvent[]>([])
   const [leaves, setLeaves] = useState<LocalLeave[]>([])
   const [users, setUsers] = useState<string[]>([])
+  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -62,6 +64,7 @@ export default function CalendarPage() {
   const [editingLeave, setEditingLeave] = useState<LocalLeave | null>(null)
 
   // Event form state
+  const [formVendor, setFormVendor] = useState('')
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formDate, setFormDate] = useState('')
@@ -91,6 +94,7 @@ export default function CalendarPage() {
         assignees: typeof row.assignees === 'string' && row.assignees
           ? (row.assignees as string).split(',').map((s: string) => s.trim())
           : Array.isArray(row.assignees) ? row.assignees : [],
+        vendor: (row.vendor as string) || '',
       })) as LocalWorkEvent[])
     }
   }, [])
@@ -112,13 +116,21 @@ export default function CalendarPage() {
     if (!error && data) setUsers(data.map((u: { name: string }) => u.name))
   }, [])
 
+  const fetchVendors = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('vendors')
+      .select('id, name')
+      .order('name')
+    if (!error && data) setVendors(data as { id: string; name: string }[])
+  }, [])
+
   useEffect(() => {
     async function init() {
-      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers()])
+      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers(), fetchVendors()])
       setLoading(false)
     }
     init()
-  }, [fetchEvents, fetchLeaves, fetchUsers])
+  }, [fetchEvents, fetchLeaves, fetchUsers, fetchVendors])
 
   const calendarEvents = [
     ...events.map((e) => ({
@@ -139,6 +151,7 @@ export default function CalendarPage() {
 
   function openNewEvent(date?: Date) {
     setEditingEvent(null)
+    setFormVendor('')
     setFormTitle('')
     setFormDesc('')
     setFormDate(date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
@@ -154,6 +167,7 @@ export default function CalendarPage() {
     const ev = events.find((e) => e.id === eventId)
     if (!ev) return
     setEditingEvent(ev)
+    setFormVendor(ev.vendor || '')
     setFormTitle(ev.title)
     setFormDesc(ev.description)
     setFormDate(ev.event_date)
@@ -176,7 +190,8 @@ export default function CalendarPage() {
       end_time: formEndTime,
       is_all_day: formAllDay,
       color: formColor,
-      assignees: formAssignees.join(','),
+      assignees: formAssignees.filter((a) => a !== formVendor).join(','),
+      vendor: formVendor === '無' ? '' : formVendor,
     }
     if (editingEvent) {
       await supabase.from('work_events').update(payload).eq('id', editingEvent.id)
@@ -335,6 +350,7 @@ export default function CalendarPage() {
                         <th className="text-left px-4 py-3 font-medium">日期</th>
                         <th className="text-left px-4 py-3 font-medium">時間</th>
                         <th className="text-left px-4 py-3 font-medium">指派人員</th>
+                        <th className="text-left px-4 py-3 font-medium">廠商</th>
                         <th className="text-left px-4 py-3 font-medium">說明</th>
                       </tr>
                     </thead>
@@ -350,6 +366,7 @@ export default function CalendarPage() {
                           <td className="px-4 py-3 font-mono text-xs">{e.event_date}</td>
                           <td className="px-4 py-3 text-xs">{e.is_all_day ? '全天' : `${e.start_time} ~ ${e.end_time}`}</td>
                           <td className="px-4 py-3 text-xs">{e.assignees.length > 0 ? e.assignees.join(', ') : '-'}</td>
+                          <td className="px-4 py-3 text-xs">{e.vendor || '-'}</td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">{e.description || '-'}</td>
                         </tr>
                       ))}
@@ -490,6 +507,26 @@ export default function CalendarPage() {
             </div>
           </div>
           <div>
+            <label className="block text-sm font-medium mb-1">廠商</label>
+            <select
+              value={formVendor}
+              onChange={(e) => {
+                const v = e.target.value
+                setFormVendor(v)
+                if (v && v !== '無' && !formAssignees.includes(v)) {
+                  setFormAssignees((prev) => [...prev, v])
+                }
+              }}
+              className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg"
+            >
+              <option value="">請選擇廠商</option>
+              <option value="無">無</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.name}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium mb-1">指派人員</label>
             <div className="flex flex-wrap gap-2">
               {users.map((name) => (
@@ -503,6 +540,16 @@ export default function CalendarPage() {
                   }`}
                 >
                   {name}
+                </button>
+              ))}
+              {formAssignees.filter((a) => !users.includes(a)).map((vendorName) => (
+                <button
+                  key={vendorName}
+                  onClick={() => setFormAssignees((prev) => prev.filter((n) => n !== vendorName))}
+                  className="px-3 py-1 text-sm rounded-full border bg-amber-500 text-white border-amber-500"
+                  title="點擊移除"
+                >
+                  {vendorName} ✕
                 </button>
               ))}
             </div>

@@ -8,17 +8,17 @@ import { supabase } from '@/lib/supabase'
 
 interface Circuit {
   id: string
+  org_id: string
   circuit_number: string
   bandwidth: string
   ip_address: string
-  vendor: string
   unit_name: string
-  description: string
 }
 
 export default function CircuitManagementPage() {
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [units, setUnits] = useState<string[]>([])
+  const [orgList, setOrgList] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -30,16 +30,27 @@ export default function CircuitManagementPage() {
   const [formCircuitNumber, setFormCircuitNumber] = useState('')
   const [formBandwidth, setFormBandwidth] = useState('')
   const [formIpAddress, setFormIpAddress] = useState('')
-  const [formDescription, setFormDescription] = useState('')
 
   const fetchCircuits = useCallback(async () => {
-    const { data } = await supabase.from('circuits').select('*').order('unit_name, circuit_number')
-    if (data) setCircuits(data)
+    const { data } = await supabase.from('org_circuits').select('*, organizations(name)').order('circuit_number')
+    if (data) {
+      setCircuits(data.map((d: Record<string, unknown>) => ({
+        id: d.id as string,
+        org_id: d.org_id as string,
+        circuit_number: d.circuit_number as string,
+        bandwidth: d.bandwidth as string,
+        ip_address: d.ip_address as string,
+        unit_name: (d.organizations as { name: string } | null)?.name || '',
+      })))
+    }
   }, [])
 
   const fetchUnits = useCallback(async () => {
-    const { data } = await supabase.from('organizations').select('name').order('name')
-    if (data) setUnits(data.map((d) => d.name))
+    const { data } = await supabase.from('organizations').select('id, name').order('name')
+    if (data) {
+      setOrgList(data as { id: string; name: string }[])
+      setUnits(data.map((d) => d.name))
+    }
   }, [])
 
   useEffect(() => {
@@ -52,24 +63,27 @@ export default function CircuitManagementPage() {
 
   function openAdd() {
     setEditingId(null)
-    setFormUnit(units[0] || ''); setFormCircuitNumber(''); setFormBandwidth(''); setFormIpAddress(''); setFormDescription('')
+    setFormUnit(units[0] || ''); setFormCircuitNumber(''); setFormBandwidth(''); setFormIpAddress('')
     setShowModal(true)
   }
 
   function openEdit(c: Circuit) {
     setEditingId(c.id)
-    setFormUnit(c.unit_name); setFormCircuitNumber(c.circuit_number); setFormBandwidth(c.bandwidth); setFormIpAddress(c.ip_address); setFormDescription(c.description)
+    setFormUnit(c.unit_name); setFormCircuitNumber(c.circuit_number); setFormBandwidth(c.bandwidth); setFormIpAddress(c.ip_address)
     setShowModal(true)
   }
 
   async function save() {
-    if (!formCircuitNumber.trim() || !formBandwidth.trim()) return
+    if (!formCircuitNumber.trim() || !formBandwidth.trim() || !formUnit) return
     setSaving(true)
-    const payload = { unit_name: formUnit, circuit_number: formCircuitNumber.trim(), bandwidth: formBandwidth.trim(), ip_address: formIpAddress.trim(), description: formDescription.trim() }
+    // 找出 org_id
+    const org = orgList.find((o) => o.name === formUnit)
+    if (!org) { setSaving(false); return }
+    const payload = { org_id: org.id, circuit_number: formCircuitNumber.trim(), bandwidth: formBandwidth.trim(), ip_address: formIpAddress.trim() }
     if (editingId) {
-      await supabase.from('circuits').update(payload).eq('id', editingId)
+      await supabase.from('org_circuits').update(payload).eq('id', editingId)
     } else {
-      await supabase.from('circuits').insert(payload)
+      await supabase.from('org_circuits').insert(payload)
     }
     setSaving(false)
     setShowModal(false)
@@ -78,7 +92,7 @@ export default function CircuitManagementPage() {
 
   async function remove(id: string) {
     if (!confirm('確定要刪除此線路？')) return
-    await supabase.from('circuits').delete().eq('id', id)
+    await supabase.from('org_circuits').delete().eq('id', id)
     fetchCircuits()
   }
 
@@ -86,8 +100,7 @@ export default function CircuitManagementPage() {
     const matchUnit = filterUnit === 'all' || c.unit_name === filterUnit
     const matchSearch = !searchTerm ||
       c.circuit_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.unit_name.includes(searchTerm) ||
-      c.bandwidth.includes(searchTerm)
+      c.unit_name.includes(searchTerm)
     return matchUnit && matchSearch
   })
 
@@ -98,8 +111,8 @@ export default function CircuitManagementPage() {
   })).filter((g) => g.circuits.length > 0)
 
   function exportCSV() {
-    const header = '單位,電路編號,頻寬(Mb),IP位址,說明'
-    const rows = circuits.map((c) => `${c.unit_name},${c.circuit_number},${c.bandwidth},${c.ip_address},${c.description}`)
+    const header = '單位,電路編號,頻寬(Mb),IP位址'
+    const rows = circuits.map((c) => `${c.unit_name},${c.circuit_number},${c.bandwidth},${c.ip_address}`)
     const csv = [header, ...rows].join('\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -115,12 +128,17 @@ export default function CircuitManagementPage() {
     reader.onload = async (ev) => {
       const text = ev.target?.result as string
       const lines = text.split('\n').filter((l) => l.trim())
-      const rows = lines.slice(1).map((line) => {
+      const rows: { org_id: string; circuit_number: string; bandwidth: string; ip_address: string }[] = []
+      for (const line of lines.slice(1)) {
         const parts = line.split(',').map((p) => p.trim())
-        return { unit_name: parts[0] || '', circuit_number: parts[1] || '', bandwidth: parts[2] || '', ip_address: parts[3] || '', description: parts[4] || '' }
-      }).filter((r) => r.circuit_number)
+        const unitName = parts[0] || ''
+        const org = orgList.find((o) => o.name === unitName)
+        if (org && parts[1]) {
+          rows.push({ org_id: org.id, circuit_number: parts[1], bandwidth: parts[2] || '', ip_address: parts[3] || '' })
+        }
+      }
       if (rows.length > 0) {
-        await supabase.from('circuits').insert(rows)
+        await supabase.from('org_circuits').insert(rows)
         fetchCircuits()
       }
     }
@@ -172,7 +190,6 @@ export default function CircuitManagementPage() {
               <th className="text-left px-4 py-3 font-medium">電路編號</th>
               <th className="text-left px-4 py-3 font-medium">頻寬 (Mb)</th>
               <th className="text-left px-4 py-3 font-medium">IP 位址</th>
-              <th className="text-left px-4 py-3 font-medium">說明</th>
               <th className="text-center px-4 py-3 font-medium w-24">操作</th>
             </tr>
           </thead>
@@ -193,7 +210,6 @@ export default function CircuitManagementPage() {
                     <span className="bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)] px-2 py-0.5 rounded text-xs font-medium">{c.bandwidth}</span>
                   </td>
                   <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{c.ip_address || '-'}</td>
-                  <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{c.description || '-'}</td>
                   <td className="px-4 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-[var(--color-primary-dim)] rounded text-[var(--color-primary)]"><Pencil className="w-3.5 h-3.5" /></button>
@@ -204,7 +220,7 @@ export default function CircuitManagementPage() {
               ))
             )}
             {filtered.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-[var(--color-text-muted)]">沒有符合條件的線路</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-[var(--color-text-muted)]">沒有符合條件的線路</td></tr>
             )}
           </tbody>
         </table>
@@ -229,10 +245,6 @@ export default function CircuitManagementPage() {
           <div>
             <label className="block text-sm font-medium mb-1">IP 位址</label>
             <input value={formIpAddress} onChange={(e) => setFormIpAddress(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" placeholder="e.g. 192.168.1.1" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">說明</label>
-            <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
