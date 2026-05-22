@@ -212,10 +212,17 @@ export default function OrganizationsPage() {
 
   async function save() {
     if (!formName.trim()) return
+    const name = formName.trim()
+
+    // 唯一值檢查
+    const dupQuery = supabase.from('organizations').select('id').eq('name', name)
+    if (editingId) dupQuery.neq('id', editingId)
+    const { data: dup } = await dupQuery.limit(1)
+    if (dup && dup.length > 0) { alert(`單位名稱「${name}」已存在`); return }
+
     setSaving(true)
 
     try {
-      const name = formName.trim()
       const validCircuits = formCircuits
         .filter((c) => c.circuit_number.trim())
         .map((c) => ({

@@ -154,6 +154,21 @@ export default function VmManagementPage() {
 
   async function save() {
     if (!formHostname.trim()) return
+
+    // hostname 唯一值檢查
+    const hQuery = supabase.from('vm_instances').select('id').eq('hostname', formHostname.trim())
+    if (editingId) hQuery.neq('id', editingId)
+    const { data: hDup } = await hQuery.limit(1)
+    if (hDup && hDup.length > 0) { alert(`主機名稱「${formHostname.trim()}」已存在`); return }
+
+    // ip_address 唯一值檢查（非空時）
+    if (formIp.trim()) {
+      const ipQuery = supabase.from('vm_instances').select('id').eq('ip_address', formIp.trim())
+      if (editingId) ipQuery.neq('id', editingId)
+      const { data: ipDup } = await ipQuery.limit(1)
+      if (ipDup && ipDup.length > 0) { alert(`IP 位址「${formIp.trim()}」已存在`); return }
+    }
+
     setSaving(true)
     const payload = {
       network_zone: formZone,

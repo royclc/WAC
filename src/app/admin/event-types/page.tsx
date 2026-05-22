@@ -51,6 +51,11 @@ export default function EventTypesPage() {
 
   async function save() {
     if (!formName) return
+    const dupQuery = supabase.from('event_types').select('id').eq('name', formName.trim())
+    if (editing) dupQuery.neq('id', editing.id)
+    const { data: dup } = await dupQuery.limit(1)
+    if (dup && dup.length > 0) { alert(`事件類型「${formName}」已存在`); return }
+
     setSaving(true)
     const payload = { name: formName, color: formColor, description: formDesc }
     if (editing) {
