@@ -17,6 +17,7 @@ import {
   BarChart3,
   Activity,
   Server,
+  FileText,
 } from 'lucide-react'
 
 const navItems = [
@@ -25,11 +26,13 @@ const navItems = [
   { href: '/availability/server', label: '硬體可用率', icon: HardDrive },
   { href: '/availability/network', label: '網路可用率', icon: Wifi },
   { href: '/reports', label: '統計報表', icon: BarChart3 },
+  { href: '/changes', label: '服務變動記錄', icon: FileText },
 ]
 
 const adminItems = [
   { href: '/admin/organizations', label: '單位管理', icon: Landmark },
   { href: '/admin/servers', label: '硬體管理', icon: HardDrive },
+  { href: '/admin/vms', label: 'VM 管理', icon: Server },
   { href: '/admin/maintenance', label: '保養類別管理', icon: Wrench },
   { href: '/admin/units', label: '網路管理', icon: Building2 },
   { href: '/admin/circuits', label: '線路管理', icon: Cable },
