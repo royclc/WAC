@@ -140,6 +140,7 @@ export default function NetworkAvailabilityCalendar() {
   const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
   const [circuits, setCircuits] = useState<Circuit[]>([])
 
+  const [eventTypeOptions, setEventTypeOptions] = useState<string[]>(EVENT_TYPE_OPTIONS)
   const [editingIds, setEditingIds] = useState<string[]>([])  // batch edit: device event IDs
   const [editingCircuitIds, setEditingCircuitIds] = useState<string[]>([])  // batch edit: circuit event IDs
   const [formSelectMode, setFormSelectMode] = useState<'unit' | 'device' | 'circuit'>('unit')
@@ -249,11 +250,16 @@ export default function NetworkAvailabilityCalendar() {
     setCircuitEvents(mapped)
   }, [])
 
+  const fetchEventTypes = useCallback(async () => {
+    const { data } = await supabase.from('event_types').select('name').order('name')
+    if (data && data.length > 0) setEventTypeOptions(data.map((d: { name: string }) => d.name))
+  }, [])
+
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchAssets(), fetchCircuits(), fetchDowntimeEvents(), fetchCircuitEvents()])
+    await Promise.all([fetchAssets(), fetchCircuits(), fetchDowntimeEvents(), fetchCircuitEvents(), fetchEventTypes()])
     setLoading(false)
-  }, [fetchAssets, fetchCircuits, fetchDowntimeEvents, fetchCircuitEvents])
+  }, [fetchAssets, fetchCircuits, fetchDowntimeEvents, fetchCircuitEvents, fetchEventTypes])
 
   useEffect(() => {
     fetchAll()
@@ -375,7 +381,7 @@ export default function NetworkAvailabilityCalendar() {
     setFormSelectedCircuits([])
     setExpandCircuits(true)
     setExpandDevices(true)
-    setFormEventType('設備維護')
+    setFormEventType(eventTypeOptions[0] || '設備維護')
     setFormPlanType('unplanned')
     setFormTitle('')
     setFormDesc('')
@@ -1139,9 +1145,9 @@ export default function NetworkAvailabilityCalendar() {
           {/* 事件類型 */}
           <div>
             <label className="block text-sm font-medium mb-1">事件類型 *</label>
-            <select value={formEventType} onChange={(e) => { const v = e.target.value; if (!formTitle || EVENT_TYPE_OPTIONS.includes(formTitle)) setFormTitle(v); setFormEventType(v) }}
+            <select value={formEventType} onChange={(e) => { const v = e.target.value; if (!formTitle || eventTypeOptions.includes(formTitle)) setFormTitle(v); setFormEventType(v) }}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {EVENT_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {eventTypeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
