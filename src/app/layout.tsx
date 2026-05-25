@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import ChatAssistant from '@/components/ChatAssistant'
 
 export const metadata: Metadata = {
   title: 'MAC - 可用率與工作月曆系統',
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-TW">
       <body className="bg-[var(--color-bg)] text-[var(--color-text)] min-h-screen">
         {children}
+        <ChatAssistant />
       </body>
     </html>
   )
