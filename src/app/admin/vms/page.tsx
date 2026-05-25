@@ -160,11 +160,11 @@ export default function VmManagementPage() {
   async function save() {
     if (!formHostname.trim()) return
 
-    // hostname 唯一值檢查
-    const hQuery = supabase.from('vm_instances').select('id').eq('hostname', formHostname.trim())
+    // 網段 + 主機名稱 唯一值檢查
+    const hQuery = supabase.from('vm_instances').select('id').eq('network_zone', formZone).eq('hostname', formHostname.trim())
     if (editingId) hQuery.neq('id', editingId)
     const { data: hDup } = await hQuery.limit(1)
-    if (hDup && hDup.length > 0) { alert(`主機名稱「${formHostname.trim()}」已存在`); return }
+    if (hDup && hDup.length > 0) { alert(`${formZone} 中已存在主機名稱「${formHostname.trim()}」`); return }
 
     // ip_address 唯一值檢查（非空時）
     if (formIp.trim()) {
