@@ -24,12 +24,13 @@ interface DowntimeEvent {
   asset_type: string
   asset_id: string
   asset_name: string
-  event_type: 'downtime' | 'maintenance' | 'other'
+  event_type: string
   plan_type: string | null
   title: string
   description: string
   start_time: string
   end_time: string
+  is_external: boolean
 }
 
 interface AssetOption {
@@ -79,11 +80,14 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
   const [saving, setSaving] = useState(false)
   const [allAssets, setAllAssets] = useState<AssetOption[]>([])
 
+  const [eventTypeOptions, setEventTypeOptions] = useState<string[]>([])
+
   // Form state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formAsset, setFormAsset] = useState('')
-  const [formType, setFormType] = useState<'downtime' | 'maintenance' | 'other'>('downtime')
+  const [formType, setFormType] = useState('downtime')
   const [formPlanType, setFormPlanType] = useState<EventPlanType>('unplanned')
+  const [formIsExternal, setFormIsExternal] = useState(false)
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formStart, setFormStart] = useState('')
@@ -139,7 +143,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
   const fetchEvents = useCallback(async () => {
     const { data } = await supabase
       .from('downtime_events')
-      .select('id, asset_type, asset_id, asset_name, event_type, plan_type, title, description, start_time, end_time')
+      .select('id, asset_type, asset_id, asset_name, event_type, plan_type, title, description, start_time, end_time, is_external')
       .eq('asset_type', assetType)
 
     if (data) {
@@ -147,17 +151,22 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     }
   }, [assetType])
 
+  const fetchEventTypes = useCallback(async () => {
+    const { data } = await supabase.from('event_types').select('name').order('name')
+    if (data && data.length > 0) setEventTypeOptions(data.map((d: { name: string }) => d.name))
+  }, [])
+
   // ── Init ──
   useEffect(() => {
     let cancelled = false
     async function init() {
       setLoading(true)
-      await Promise.all([fetchAssets(), fetchEvents()])
+      await Promise.all([fetchAssets(), fetchEvents(), fetchEventTypes()])
       if (!cancelled) setLoading(false)
     }
     init()
     return () => { cancelled = true }
-  }, [fetchAssets, fetchEvents])
+  }, [fetchAssets, fetchEvents, fetchEventTypes])
 
   // 硬體可用率只計算 x86 伺服器
   const assets = assetType === 'server' ? allAssets.filter((a) => a.category === 'x86_server') : allAssets
@@ -183,6 +192,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
       const assetEvents = events.filter((e) => e.asset_id === asset.id)
       let plannedMinutes = 0
       let unplannedMinutes = 0
+      let unplannedNonExternalMinutes = 0
 
       const monthStart = new Date(year, month, 1)
       const monthEnd = new Date(year, month + 1, 1)
@@ -195,14 +205,18 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
         if (effectiveEnd > effectiveStart) {
           const mins = (effectiveEnd.getTime() - effectiveStart.getTime()) / 60000
           if (e.plan_type === 'planned') plannedMinutes += mins
-          else unplannedMinutes += mins
+          else {
+            unplannedMinutes += mins
+            if (!e.is_external) unplannedNonExternalMinutes += mins
+          }
         }
       })
 
       const plannedHours = Math.round((plannedMinutes / 60) * 100) / 100
       const unplannedHours = Math.round((unplannedMinutes / 60) * 100) / 100
+      const unplannedNonExternalHours = Math.round((unplannedNonExternalMinutes / 60) * 100) / 100
       const downtimeHours = Math.round((plannedHours + unplannedHours) * 100) / 100
-      const pct = totalHours > 0 ? Math.round(((totalHours - unplannedHours) / totalHours) * 10000) / 100 : 100
+      const pct = totalHours > 0 ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100 : 100
 
       return { asset, plannedHours, unplannedHours, downtimeHours, totalHours, pct, eventCount: assetEvents.length }
     })
@@ -213,8 +227,9 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
   function openNewEvent(date?: Date) {
     setEditingId(null)
     setFormAsset(assets[0]?.id || '')
-    setFormType('downtime')
+    setFormType(eventTypeOptions[0] || 'downtime')
     setFormPlanType('unplanned')
+    setFormIsExternal(false)
     setFormTitle('')
     setFormDesc('')
     const d = date || new Date()
@@ -228,6 +243,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     setFormAsset(e.asset_id)
     setFormType(e.event_type)
     setFormPlanType((e.plan_type as EventPlanType) || 'unplanned')
+    setFormIsExternal(e.is_external || false)
     setFormTitle(e.title)
     setFormDesc(e.description)
     setFormStart(format(parseLocalDate(e.start_time), "yyyy-MM-dd'T'HH:mm"))
@@ -240,12 +256,15 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
     const asset = allAssets.find((a) => a.id === formAsset)
     setSaving(true)
 
+    const isExternal = formPlanType === 'unplanned' ? formIsExternal : false
+
     if (editingId) {
       const { error } = await supabase.from('downtime_events').update({
         asset_id: formAsset,
         asset_name: asset?.name || '',
         event_type: formType,
         plan_type: formPlanType,
+        is_external: isExternal,
         title: formTitle,
         description: formDesc,
         start_time: formStart,
@@ -260,6 +279,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
         asset_name: asset?.name || '',
         event_type: formType,
         plan_type: formPlanType,
+        is_external: isExternal,
         title: formTitle,
         description: formDesc,
         start_time: formStart,
@@ -497,8 +517,8 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
-                            {EVENT_TYPE_LABELS[e.event_type]}
+                          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] || '#6B7280' }}>
+                            {EVENT_TYPE_LABELS[e.event_type] || e.event_type}
                           </span>
                         </td>
                         <td className="px-4 py-3">{e.asset_name}</td>
@@ -534,8 +554,8 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                       <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PLAN_TYPE_COLORS[(e.plan_type as EventPlanType) || 'unplanned'] }}>
                         {PLAN_TYPE_LABELS[(e.plan_type as EventPlanType) || 'unplanned']}
                       </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] }}>
-                        {EVENT_TYPE_LABELS[e.event_type]}
+                      <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: EVENT_TYPE_COLORS[e.event_type] || '#6B7280' }}>
+                        {EVENT_TYPE_LABELS[e.event_type] || e.event_type}
                       </span>
                     </div>
                     <div className="flex gap-2">
@@ -588,8 +608,11 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">事件類型</label>
-            <select value={formType} onChange={(e) => setFormType(e.target.value as 'downtime' | 'maintenance' | 'other')} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
-              {Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <select value={formType} onChange={(e) => setFormType(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
+              {eventTypeOptions.length > 0
+                ? eventTypeOptions.map((t) => <option key={t} value={t}>{t}</option>)
+                : Object.entries(EVENT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)
+              }
             </select>
           </div>
           <div>
@@ -602,6 +625,13 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
                 </button>
               ))}
             </div>
+            {formPlanType === 'unplanned' && (
+              <label className="flex items-center gap-2 mt-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={formIsExternal} onChange={(e) => setFormIsExternal(e.target.checked)} className="rounded border-gray-300" />
+                <span>是否為外力因素</span>
+                <span className="text-xs text-[var(--color-text-muted)]">（勾選後不計入可用率）</span>
+              </label>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">事件標題 *</label>
