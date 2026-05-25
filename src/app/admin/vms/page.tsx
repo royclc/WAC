@@ -23,6 +23,7 @@ interface VmInstance {
   disk2_gb: string
   disk3_gb: string
   note: string
+  is_owner_vm: boolean
 }
 
 const NETWORK_ZONES = ['內網', '中繼', '外網']
@@ -68,6 +69,8 @@ export default function VmManagementPage() {
   const [formDisk3, setFormDisk3] = useState('')
   const [formDisk3Custom, setFormDisk3Custom] = useState('')
   const [formNote, setFormNote] = useState('')
+  const [formIsOwnerVm, setFormIsOwnerVm] = useState(false)
+  const [filterOwnerVm, setFilterOwnerVm] = useState(false)
 
   const fetchVms = useCallback(async () => {
     const { data } = await supabase.from('vm_instances').select('*').order('network_zone, hostname')
@@ -88,6 +91,7 @@ export default function VmManagementPage() {
     setFormDisk2(''); setFormDisk2Custom('')
     setFormDisk3(''); setFormDisk3Custom('')
     setFormNote('')
+    setFormIsOwnerVm(false)
   }
 
   function openAdd() {
@@ -127,6 +131,7 @@ export default function VmManagementPage() {
     parseDisk(vm.disk2_gb, setFormDisk2, setFormDisk2Custom)
     parseDisk(vm.disk3_gb, setFormDisk3, setFormDisk3Custom)
     setFormNote(vm.note)
+    setFormIsOwnerVm(vm.is_owner_vm || false)
     setShowModal(true)
   }
 
@@ -186,6 +191,7 @@ export default function VmManagementPage() {
       disk2_gb: getDiskValue(formDisk2, formDisk2Custom),
       disk3_gb: getDiskValue(formDisk3, formDisk3Custom),
       note: formNote.trim(),
+      is_owner_vm: formIsOwnerVm,
     }
     if (editingId) {
       await supabase.from('vm_instances').update(payload).eq('id', editingId)
@@ -204,9 +210,9 @@ export default function VmManagementPage() {
   }
 
   function exportCSV() {
-    const header = '網段,主機名稱,IP Address,OS名稱,OS版本,區域,服務群組,服務名稱,安裝軟體,CPU(core),RAM(GB),磁碟1(GB),磁碟2(GB),磁碟3(GB),附註'
+    const header = '網段,主機名稱,IP Address,OS名稱,OS版本,區域,服務群組,服務名稱,安裝軟體,CPU(core),RAM(GB),磁碟1(GB),磁碟2(GB),磁碟3(GB),附註,業主VM'
     const rows = vms.map((v) =>
-      `${v.network_zone},${v.hostname},${v.ip_address},${v.os_name},${v.os_version},${v.area},${v.service_group},${v.service_name},${v.software},${v.cpu_cores},${v.ram_gb},${v.disk1_gb},${v.disk2_gb},${v.disk3_gb},${v.note}`
+      `${v.network_zone},${v.hostname},${v.ip_address},${v.os_name},${v.os_version},${v.area},${v.service_group},${v.service_name},${v.software},${v.cpu_cores},${v.ram_gb},${v.disk1_gb},${v.disk2_gb},${v.disk3_gb},${v.note},${v.is_owner_vm ? '是' : '否'}`
     )
     const csv = [header, ...rows].join('\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -244,13 +250,14 @@ export default function VmManagementPage() {
 
   const filtered = vms.filter((v) => {
     const matchZone = filterZone === 'all' || v.network_zone === filterZone
+    const matchOwner = !filterOwnerVm || v.is_owner_vm
     const term = searchTerm.toLowerCase()
     const matchSearch = !term ||
       v.hostname.toLowerCase().includes(term) ||
       v.ip_address.includes(term) ||
       v.service_name.toLowerCase().includes(term) ||
       v.os_name.toLowerCase().includes(term)
-    return matchZone && matchSearch
+    return matchZone && matchOwner && matchSearch
   })
 
   if (loading) return <AppShell><div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" /><span className="ml-2 text-[var(--color-text-muted)]">載入中...</span></div></AppShell>
@@ -303,6 +310,10 @@ export default function VmManagementPage() {
           <option value="all">所有網段</option>
           {NETWORK_ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
         </select>
+        <label className="flex items-center gap-2 px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm cursor-pointer hover:bg-[var(--color-hover)]">
+          <input type="checkbox" checked={filterOwnerVm} onChange={(e) => setFilterOwnerVm(e.target.checked)} className="rounded border-gray-300" />
+          業主VM
+        </label>
       </div>
 
       {/* Summary cards - clickable filter */}
@@ -511,6 +522,12 @@ export default function VmManagementPage() {
             {renderDiskSelect('磁碟2 (GB)', formDisk2, formDisk2Custom, setFormDisk2, setFormDisk2Custom)}
             {renderDiskSelect('磁碟3 (GB)', formDisk3, formDisk3Custom, setFormDisk3, setFormDisk3Custom)}
           </div>
+
+          {/* 業主VM */}
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={formIsOwnerVm} onChange={(e) => setFormIsOwnerVm(e.target.checked)} className="rounded border-gray-300" />
+            <span className="font-medium">是否為業主VM</span>
+          </label>
 
           {/* 附註 */}
           <div>
