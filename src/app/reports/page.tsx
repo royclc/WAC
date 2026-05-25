@@ -173,8 +173,8 @@ function calcPeriodStats(
       const ed = eEnd > periodEnd ? periodEnd : eEnd
       if (ed > s) {
         const mins = (ed.getTime() - s.getTime()) / 60000
-        if (e.plan_type === 'planned') plannedMins += mins * asset.quantity
-        else unplannedMins += mins * asset.quantity
+        if (e.plan_type === 'planned') plannedMins += mins
+        else unplannedMins += mins
       }
     })
   })
@@ -209,8 +209,8 @@ function calcServerPeriodStats(
       const ed = eEnd > periodEnd ? periodEnd : eEnd
       if (ed > s) {
         const mins = (ed.getTime() - s.getTime()) / 60000
-        if (e.plan_type === 'planned') plannedMins += mins * asset.quantity
-        else unplannedMins += mins * asset.quantity
+        if (e.plan_type === 'planned') plannedMins += mins
+        else unplannedMins += mins
       }
     })
 
