@@ -49,6 +49,7 @@ interface DowntimeEvent {
   description: string
   start_time: string
   end_time: string
+  is_external: boolean
 }
 
 // 線路也可以產生事件
@@ -59,6 +60,7 @@ interface CircuitEvent {
   title: string
   start_time: string
   end_time: string
+  is_external: boolean
 }
 
 const PLAN_TYPE_LABELS: Record<EventPlanType, string> = {
@@ -98,6 +100,7 @@ function calcStats(
   const totalHours = hoursPerDevice * count
   let plannedMins = 0
   let unplannedMins = 0
+  let unplannedNonExternalMins = 0
   let eventCount = 0
 
   assets.forEach((asset) => {
@@ -110,16 +113,20 @@ function calcStats(
       if (ed > s) {
         const mins = (ed.getTime() - s.getTime()) / 60000
         if (e.plan_type === 'planned') plannedMins += mins
-        else unplannedMins += mins
+        else {
+          unplannedMins += mins
+          if (!e.is_external) unplannedNonExternalMins += mins
+        }
       }
     })
   })
 
   const plannedHours = Math.round((plannedMins / 60) * 100) / 100
   const unplannedHours = Math.round((unplannedMins / 60) * 100) / 100
-  // 可用率 = (總時數 - 非計畫性時數) / 總時數 * 100%
+  const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
+  // 可用率 = (總時數 - 非計畫性非外力時數) / 總時數 * 100%
   const availabilityPct = totalHours > 0
-    ? Math.round(((totalHours - unplannedHours) / totalHours) * 10000) / 100
+    ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
     : 100
 
   return { count, hoursPerDevice, totalHours, plannedHours, unplannedHours, availabilityPct, eventCount }
@@ -152,6 +159,7 @@ export default function NetworkAvailabilityCalendar() {
   const [formSelectedCircuits, setFormSelectedCircuits] = useState<string[]>([])  // selected circuit IDs
   const [formEventType, setFormEventType] = useState('設備維護')
   const [formPlanType, setFormPlanType] = useState<EventPlanType>('unplanned')
+  const [formIsExternal, setFormIsExternal] = useState(false)
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formStart, setFormStart] = useState('')
@@ -227,6 +235,7 @@ export default function NetworkAvailabilityCalendar() {
       description: d.description || '',
       start_time: d.start_time,
       end_time: d.end_time,
+      is_external: d.is_external || false,
     }))
     setEvents(mapped)
   }, [])
@@ -246,6 +255,7 @@ export default function NetworkAvailabilityCalendar() {
       title: d.title,
       start_time: d.start_time,
       end_time: d.end_time,
+      is_external: d.is_external || false,
     }))
     setCircuitEvents(mapped)
   }, [])
@@ -318,6 +328,7 @@ export default function NetworkAvailabilityCalendar() {
         const assetEvents = events.filter((e) => e.asset_id === asset.id)
         let plannedMins = 0
         let unplannedMins = 0
+        let unplannedNonExternalMins = 0
         assetEvents.forEach((e) => {
           const eStart = parseLocalDate(e.start_time)
           const eEnd = parseLocalDate(e.end_time)
@@ -326,14 +337,18 @@ export default function NetworkAvailabilityCalendar() {
           if (ed > s) {
             const mins = (ed.getTime() - s.getTime()) / 60000
             if (e.plan_type === 'planned') plannedMins += mins
-            else unplannedMins += mins
+            else {
+              unplannedMins += mins
+              if (!e.is_external) unplannedNonExternalMins += mins
+            }
           }
         })
         const plannedHours = Math.round((plannedMins / 60) * 100) / 100
         const unplannedHours = Math.round((unplannedMins / 60) * 100) / 100
+        const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
         const totalH = hoursPerDevice * asset.quantity
         const pct = totalH > 0
-          ? Math.round(((totalH - unplannedHours) / totalH) * 10000) / 100
+          ? Math.round(((totalH - unplannedNonExternalHours) / totalH) * 10000) / 100
           : 100
         return { asset, plannedHours, unplannedHours, pct }
       })
@@ -350,6 +365,7 @@ export default function NetworkAvailabilityCalendar() {
         const cEvents = circuitEvents.filter((e) => e.circuit_id === circuit.id)
         let plannedMins = 0
         let unplannedMins = 0
+        let unplannedNonExternalMins = 0
         cEvents.forEach((e) => {
           const eStart = parseLocalDate(e.start_time)
           const eEnd = parseLocalDate(e.end_time)
@@ -358,13 +374,17 @@ export default function NetworkAvailabilityCalendar() {
           if (ed > s) {
             const mins = (ed.getTime() - s.getTime()) / 60000
             if (e.plan_type === 'planned') plannedMins += mins
-            else unplannedMins += mins
+            else {
+              unplannedMins += mins
+              if (!e.is_external) unplannedNonExternalMins += mins
+            }
           }
         })
         const plannedHours = Math.round((plannedMins / 60) * 100) / 100
         const unplannedHours = Math.round((unplannedMins / 60) * 100) / 100
+        const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
         const pct = hoursPerDevice > 0
-          ? Math.round(((hoursPerDevice - unplannedHours) / hoursPerDevice) * 10000) / 100
+          ? Math.round(((hoursPerDevice - unplannedNonExternalHours) / hoursPerDevice) * 10000) / 100
           : 100
         return { circuit, plannedHours, unplannedHours, pct }
       })
@@ -383,6 +403,7 @@ export default function NetworkAvailabilityCalendar() {
     setExpandDevices(true)
     setFormEventType(eventTypeOptions[0] || '設備維護')
     setFormPlanType('unplanned')
+    setFormIsExternal(false)
     setFormTitle('')
     setFormDesc('')
     const d = date || new Date()
@@ -403,6 +424,7 @@ export default function NetworkAvailabilityCalendar() {
     setFormSelectedCircuits(circuitEvts.map((e) => e.circuit_id))
     setFormEventType(first.title)
     setFormPlanType(first.plan_type)
+    setFormIsExternal(first.is_external || false)
     setFormTitle(first.title)
     setFormDesc('description' in first ? first.description : '')
     setFormStart(format(parseLocalDate(first.start_time), "yyyy-MM-dd'T'HH:mm"))
@@ -431,12 +453,14 @@ export default function NetworkAvailabilityCalendar() {
       }
     }
 
+    const isExternal = formPlanType === 'unplanned' ? formIsExternal : false
+
     if (hasAssets) {
       const rows = formSelectedAssets.map((assetId) => {
         const asset = networkAssets.find((a) => a.id === assetId)
         return {
           asset_type: 'network', asset_id: assetId, asset_name: asset?.name || '',
-          event_type: formEventType, plan_type: formPlanType,
+          event_type: formEventType, plan_type: formPlanType, is_external: isExternal,
           title: effectiveTitle, description: formDesc, start_time: formStart, end_time: formEnd,
         }
       })
@@ -446,7 +470,7 @@ export default function NetworkAvailabilityCalendar() {
 
     if (hasCircuits) {
       const cRows = formSelectedCircuits.map((cid) => ({
-        circuit_id: cid, plan_type: formPlanType,
+        circuit_id: cid, plan_type: formPlanType, is_external: isExternal,
         title: formTitle, description: formDesc, start_time: formStart, end_time: formEnd,
       }))
       const { error } = await supabase.from('circuit_events').insert(cRows)
@@ -1161,6 +1185,13 @@ export default function NetworkAvailabilityCalendar() {
                 </button>
               ))}
             </div>
+            {formPlanType === 'unplanned' && (
+              <label className="flex items-center gap-2 mt-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={formIsExternal} onChange={(e) => setFormIsExternal(e.target.checked)} className="rounded border-gray-300" />
+                <span>是否為外力因素</span>
+                <span className="text-xs text-[var(--color-text-muted)]">（勾選後不計入可用率）</span>
+              </label>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">事件標題 *</label>
