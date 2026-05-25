@@ -191,7 +191,7 @@ function calcPeriodStats(
   const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
   const totalHours = hoursPerDevice * totalCount
   const availabilityPct = totalHours > 0
-    ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
+    ? Math.floor(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
     : 100
 
   return { totalCount, hoursPerDevice, plannedHours, unplannedHours, availabilityPct }
@@ -231,7 +231,7 @@ function calcServerPeriodStats(
     const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
     const totalHours = hoursPerDevice * asset.quantity
     const availabilityPct = totalHours > 0
-      ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
+      ? Math.floor(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
       : 100
 
     return { totalCount: asset.quantity, hoursPerDevice, totalHours, plannedHours, unplannedHours, availabilityPct }
@@ -667,7 +667,7 @@ export default function ReportsPage() {
       const qUnplanned = periodsWithData.reduce((s, r) => s + r.unplannedHours, 0)
       const qTotalHours = qTotalHoursPerDevice * totalCount
       const qPct = qTotalHours > 0
-        ? Math.round(((qTotalHours - qUnplanned) / qTotalHours) * 10000) / 100
+        ? Math.floor(((qTotalHours - qUnplanned) / qTotalHours) * 10000) / 100
         : 100
 
       return {
@@ -856,7 +856,7 @@ export default function ReportsPage() {
       const qUnplanned = periodsWithData.reduce((s, r) => s + r.unplannedHours, 0)
       const qTotalHours = qTotalHoursPerDevice * asset.quantity
       const qPct = qTotalHours > 0
-        ? Math.round(((qTotalHours - qUnplanned) / qTotalHours) * 10000) / 100
+        ? Math.floor(((qTotalHours - qUnplanned) / qTotalHours) * 10000) / 100
         : 100
 
       return {
