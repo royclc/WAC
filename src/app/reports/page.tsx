@@ -31,6 +31,7 @@ interface DowntimeEvent {
   title: string
   start_time: string
   end_time: string
+  is_external: boolean
 }
 
 interface Circuit {
@@ -48,6 +49,7 @@ interface CircuitEvent {
   title: string
   start_time: string
   end_time: string
+  is_external: boolean
 }
 
 interface ServerAsset {
@@ -63,6 +65,7 @@ interface ServerEvent {
   title: string
   start_time: string
   end_time: string
+  is_external: boolean
 }
 
 // ── Quarter date utilities ──
@@ -164,6 +167,7 @@ function calcPeriodStats(
 
   let plannedMins = 0
   let unplannedMins = 0
+  let unplannedNonExternalMins = 0
 
   assets.forEach((asset) => {
     events.filter((e) => e.asset_id === asset.id).forEach((e) => {
@@ -174,16 +178,20 @@ function calcPeriodStats(
       if (ed > s) {
         const mins = (ed.getTime() - s.getTime()) / 60000
         if (e.plan_type === 'planned') plannedMins += mins
-        else unplannedMins += mins
+        else {
+          unplannedMins += mins
+          if (!e.is_external) unplannedNonExternalMins += mins
+        }
       }
     })
   })
 
   const plannedHours = Math.round((plannedMins / 60) * 100) / 100
   const unplannedHours = Math.round((unplannedMins / 60) * 100) / 100
+  const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
   const totalHours = hoursPerDevice * totalCount
   const availabilityPct = totalHours > 0
-    ? Math.round(((totalHours - unplannedHours) / totalHours) * 10000) / 100
+    ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
     : 100
 
   return { totalCount, hoursPerDevice, plannedHours, unplannedHours, availabilityPct }
@@ -201,6 +209,7 @@ function calcServerPeriodStats(
     const hoursPerDevice = getHoursBetween(periodStart, new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate() + 1))
     let plannedMins = 0
     let unplannedMins = 0
+    let unplannedNonExternalMins = 0
 
     events.filter((e) => e.asset_id === asset.id).forEach((e) => {
       const eStart = parseLocalDate(e.start_time)
@@ -210,15 +219,19 @@ function calcServerPeriodStats(
       if (ed > s) {
         const mins = (ed.getTime() - s.getTime()) / 60000
         if (e.plan_type === 'planned') plannedMins += mins
-        else unplannedMins += mins
+        else {
+          unplannedMins += mins
+          if (!e.is_external) unplannedNonExternalMins += mins
+        }
       }
     })
 
     const plannedHours = Math.round((plannedMins / 60) * 100) / 100
     const unplannedHours = Math.round((unplannedMins / 60) * 100) / 100
+    const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
     const totalHours = hoursPerDevice * asset.quantity
     const availabilityPct = totalHours > 0
-      ? Math.round(((totalHours - unplannedHours) / totalHours) * 10000) / 100
+      ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
       : 100
 
     return { totalCount: asset.quantity, hoursPerDevice, totalHours, plannedHours, unplannedHours, availabilityPct }
@@ -556,15 +569,14 @@ export default function ReportsPage() {
       // Map downtime_events -> DowntimeEvent (asset_type = 'network')
       const mappedDowntimeEvents: DowntimeEvent[] = (dtEvents ?? [])
         .filter((e: { asset_type: string }) => e.asset_type === 'network')
-        .map((e: {
-          id: string; asset_id: string; plan_type: 'planned' | 'unplanned'; title: string; start_time: string; end_time: string
-        }) => ({
+        .map((e: any) => ({
           id: e.id,
           asset_id: e.asset_id,
           plan_type: e.plan_type,
           title: e.title,
           start_time: e.start_time,
           end_time: e.end_time,
+          is_external: e.is_external || false,
         }))
       setDowntimeEvents(mappedDowntimeEvents)
 
@@ -584,15 +596,14 @@ export default function ReportsPage() {
       setCircuits(mappedCircuits)
 
       // Map circuit_events -> CircuitEvent
-      const mappedCircuitEvents: CircuitEvent[] = (cEvents ?? []).map((e: {
-        id: string; circuit_id: string; plan_type: 'planned' | 'unplanned'; title: string; start_time: string; end_time: string
-      }) => ({
+      const mappedCircuitEvents: CircuitEvent[] = (cEvents ?? []).map((e: any) => ({
         id: e.id,
         circuit_id: e.circuit_id,
         plan_type: e.plan_type,
         title: e.title,
         start_time: e.start_time,
         end_time: e.end_time,
+        is_external: e.is_external || false,
       }))
       setCircuitEvents(mappedCircuitEvents)
 
@@ -609,15 +620,14 @@ export default function ReportsPage() {
       // Map downtime_events (asset_type = 'server') -> ServerEvent
       const mappedServerEvents: ServerEvent[] = (dtEvents ?? [])
         .filter((e: { asset_type: string }) => e.asset_type === 'server')
-        .map((e: {
-          id: string; asset_id: string; plan_type: 'planned' | 'unplanned'; title: string; start_time: string; end_time: string
-        }) => ({
+        .map((e: any) => ({
           id: e.id,
           asset_id: e.asset_id,
           plan_type: e.plan_type,
           title: e.title,
           start_time: e.start_time,
           end_time: e.end_time,
+          is_external: e.is_external || false,
         }))
       setServerEvents(mappedServerEvents)
     } catch (err) {
@@ -771,7 +781,7 @@ export default function ReportsPage() {
   // ═══ Circuit summaries for fiber report ═══
 
   // 表(a): per-circuit availability summary
-  interface CircuitAvailRow { unit: string; circuit_number: string; bandwidth: string; ip_address: string; serviceHours: number; plannedHours: number; unplannedHours: number }
+  interface CircuitAvailRow { unit: string; circuit_number: string; bandwidth: string; ip_address: string; serviceHours: number; plannedHours: number; unplannedHours: number; unplannedNonExternalHours?: number }
   const selectedMonthHours = useMemo(() => {
     const adYear = rocYear + 1911
     return getDaysInMonth(new Date(adYear, month - 1)) * 24
@@ -783,6 +793,7 @@ export default function ReportsPage() {
     return circuits.map((c) => {
       let plannedMin = 0
       let unplannedMin = 0
+      let unplannedNonExternalMin = 0
       circuitEvents.filter((e) => e.circuit_id === c.id).forEach((e) => {
         const eStart = parseLocalDate(e.start_time)
         const eEnd = parseLocalDate(e.end_time)
@@ -790,7 +801,11 @@ export default function ReportsPage() {
         const s = eStart < qStart ? qStart : eStart
         const ed = eEnd > qEnd ? qEnd : eEnd
         const mins = (ed.getTime() - s.getTime()) / 60000
-        if (e.plan_type === 'planned') plannedMin += mins; else unplannedMin += mins
+        if (e.plan_type === 'planned') plannedMin += mins
+        else {
+          unplannedMin += mins
+          if (!e.is_external) unplannedNonExternalMin += mins
+        }
       })
       return {
         unit: c.unit,
@@ -800,6 +815,7 @@ export default function ReportsPage() {
         serviceHours: selectedMonthHours,
         plannedHours: Math.round((plannedMin / 60) * 100) / 100,
         unplannedHours: Math.round((unplannedMin / 60) * 100) / 100,
+        unplannedNonExternalHours: Math.round((unplannedNonExternalMin / 60) * 100) / 100,
       } as CircuitAvailRow
     })
   }, [circuits, circuitEvents, quarterRange, selectedMonthHours])
@@ -1157,7 +1173,7 @@ export default function ReportsPage() {
           group.items.forEach((item, idx) => {
             seq++
             const availPct = item.serviceHours > 0
-              ? Math.round(((item.serviceHours - item.unplannedHours) / item.serviceHours) * 10000) / 100
+              ? Math.round(((item.serviceHours - (item.unplannedNonExternalHours ?? item.unplannedHours)) / item.serviceHours) * 10000) / 100
               : 100
             const cells: TableCell[] = [docxCell(`${seq}`, { alignment: AlignmentType.CENTER })]
             if (idx === 0) { cells.push(new TableCell({ borders: createDocxBorders(), rowSpan: group.items.length, children: [new Paragraph({ children: [new TextRun({ text: group.unit, bold: true, size: 20, font: '標楷體' })] })] })) }
@@ -1374,7 +1390,7 @@ export default function ReportsPage() {
                   group.rows.map((row, rowIdx) => {
                     seq++
                     const availPct = row.serviceHours > 0
-                      ? Math.round(((row.serviceHours - row.unplannedHours) / row.serviceHours) * 10000) / 100
+                      ? Math.round(((row.serviceHours - (row.unplannedNonExternalHours ?? row.unplannedHours)) / row.serviceHours) * 10000) / 100
                       : 100
                     return (
                       <tr key={`${group.unit}-${rowIdx}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
