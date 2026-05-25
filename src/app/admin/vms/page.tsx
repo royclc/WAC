@@ -35,7 +35,7 @@ const OS_VERSION_MAP: Record<string, string[]> = {
 const AREAS = ['管理區', '資源區']
 const SERVICE_GROUPS = ['組態', '監控', '管理', '備份', '傳檔', '其他']
 const CPU_OPTIONS = Array.from({ length: 64 }, (_, i) => i + 1)
-const RAM_OPTIONS = [2, 4, 8, 12, 16, 32, 64, 128]
+const RAM_OPTIONS = [2, 4, 8, 12, 16, 24, 32, 64, 128]
 const DISK_OPTIONS = ['', '50', '100', '150', '200', '250', '300', '其他']
 
 export default function VmManagementPage() {
