@@ -224,6 +224,7 @@ CREATE TABLE IF NOT EXISTS api.vm_instances (
   disk2_gb TEXT DEFAULT '',
   disk3_gb TEXT DEFAULT '',
   note TEXT DEFAULT '',
+  is_owner_vm BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
