@@ -126,7 +126,7 @@ function calcStats(
   const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
   // 可用率 = (總時數 - 非計畫性非外力時數) / 總時數 * 100%
   const availabilityPct = totalHours > 0
-    ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
+    ? Math.floor(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
     : 100
 
   return { count, hoursPerDevice, totalHours, plannedHours, unplannedHours, availabilityPct, eventCount }
@@ -348,7 +348,7 @@ export default function NetworkAvailabilityCalendar() {
         const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
         const totalH = hoursPerDevice * asset.quantity
         const pct = totalH > 0
-          ? Math.round(((totalH - unplannedNonExternalHours) / totalH) * 10000) / 100
+          ? Math.floor(((totalH - unplannedNonExternalHours) / totalH) * 10000) / 100
           : 100
         return { asset, plannedHours, unplannedHours, pct }
       })
@@ -384,7 +384,7 @@ export default function NetworkAvailabilityCalendar() {
         const unplannedHours = Math.round((unplannedMins / 60) * 100) / 100
         const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
         const pct = hoursPerDevice > 0
-          ? Math.round(((hoursPerDevice - unplannedNonExternalHours) / hoursPerDevice) * 10000) / 100
+          ? Math.floor(((hoursPerDevice - unplannedNonExternalHours) / hoursPerDevice) * 10000) / 100
           : 100
         return { circuit, plannedHours, unplannedHours, pct }
       })

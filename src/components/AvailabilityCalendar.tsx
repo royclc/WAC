@@ -216,7 +216,7 @@ export default function AvailabilityCalendar({ assetType, typeName }: Availabili
       const unplannedHours = Math.round((unplannedMinutes / 60) * 100) / 100
       const unplannedNonExternalHours = Math.round((unplannedNonExternalMinutes / 60) * 100) / 100
       const downtimeHours = Math.round((plannedHours + unplannedHours) * 100) / 100
-      const pct = totalHours > 0 ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100 : 100
+      const pct = totalHours > 0 ? Math.floor(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100 : 100
 
       return { asset, plannedHours, unplannedHours, downtimeHours, totalHours, pct, eventCount: assetEvents.length }
     })

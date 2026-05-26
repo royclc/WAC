@@ -161,7 +161,7 @@ function calcPeriodStats(
   events: DowntimeEvent[],
   periodStart: Date,
   periodEnd: Date,
-): { totalCount: number; hoursPerDevice: number; plannedHours: number; unplannedHours: number; availabilityPct: number } {
+): { totalCount: number; hoursPerDevice: number; plannedHours: number; unplannedHours: number; unplannedNonExternalHours: number; availabilityPct: number } {
   const totalCount = assets.reduce((sum, a) => sum + a.quantity, 0)
   const hoursPerDevice = getHoursBetween(periodStart, new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate() + 1))
 
@@ -191,10 +191,10 @@ function calcPeriodStats(
   const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
   const totalHours = hoursPerDevice * totalCount
   const availabilityPct = totalHours > 0
-    ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
+    ? Math.floor(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
     : 100
 
-  return { totalCount, hoursPerDevice, plannedHours, unplannedHours, availabilityPct }
+  return { totalCount, hoursPerDevice, plannedHours, unplannedHours, unplannedNonExternalHours, availabilityPct }
 }
 
 // ── Stat calculation for server assets ──
@@ -204,7 +204,7 @@ function calcServerPeriodStats(
   events: ServerEvent[],
   periodStart: Date,
   periodEnd: Date,
-): { totalCount: number; hoursPerDevice: number; totalHours: number; plannedHours: number; unplannedHours: number; availabilityPct: number }[] {
+): { totalCount: number; hoursPerDevice: number; totalHours: number; plannedHours: number; unplannedHours: number; unplannedNonExternalHours: number; availabilityPct: number }[] {
   return assets.map((asset) => {
     const hoursPerDevice = getHoursBetween(periodStart, new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate() + 1))
     let plannedMins = 0
@@ -231,10 +231,10 @@ function calcServerPeriodStats(
     const unplannedNonExternalHours = Math.round((unplannedNonExternalMins / 60) * 100) / 100
     const totalHours = hoursPerDevice * asset.quantity
     const availabilityPct = totalHours > 0
-      ? Math.round(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
+      ? Math.floor(((totalHours - unplannedNonExternalHours) / totalHours) * 10000) / 100
       : 100
 
-    return { totalCount: asset.quantity, hoursPerDevice, totalHours, plannedHours, unplannedHours, availabilityPct }
+    return { totalCount: asset.quantity, hoursPerDevice, totalHours, plannedHours, unplannedHours, unplannedNonExternalHours, availabilityPct }
   })
 }
 
@@ -654,7 +654,7 @@ export default function ReportsPage() {
       const monthRows = quarterPeriods.map((period) => {
         const isPast = period.end < now || (period.start <= now && period.end >= now)
         if (!isPast) {
-          return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, availabilityPct: 0 }
+          return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, unplannedNonExternalHours: 0, availabilityPct: 0 }
         }
         const stats = calcPeriodStats(group.assets, downtimeEvents, period.start, period.end)
         return { period, hasData: true, ...stats }
@@ -665,9 +665,10 @@ export default function ReportsPage() {
       const qTotalHoursPerDevice = periodsWithData.reduce((s, r) => s + r.hoursPerDevice, 0)
       const qPlanned = periodsWithData.reduce((s, r) => s + r.plannedHours, 0)
       const qUnplanned = periodsWithData.reduce((s, r) => s + r.unplannedHours, 0)
+      const qUnplannedNonExternal = periodsWithData.reduce((s, r) => s + (r.unplannedNonExternalHours || 0), 0)
       const qTotalHours = qTotalHoursPerDevice * totalCount
       const qPct = qTotalHours > 0
-        ? Math.round(((qTotalHours - qUnplanned) / qTotalHours) * 10000) / 100
+        ? Math.floor(((qTotalHours - qUnplannedNonExternal) / qTotalHours) * 10000) / 100
         : 100
 
       return {
@@ -844,7 +845,7 @@ export default function ReportsPage() {
       const monthRows = quarterPeriods.map((period) => {
         const isPast = period.end < now || (period.start <= now && period.end >= now)
         if (!isPast) {
-          return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, availabilityPct: 0 }
+          return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, unplannedNonExternalHours: 0, availabilityPct: 0 }
         }
         const stats = calcServerPeriodStats([asset], serverEvents, period.start, period.end)
         return { period, hasData: true, ...stats[0] }
@@ -854,9 +855,10 @@ export default function ReportsPage() {
       const qTotalHoursPerDevice = periodsWithData.reduce((s, r) => s + r.hoursPerDevice, 0)
       const qPlanned = periodsWithData.reduce((s, r) => s + r.plannedHours, 0)
       const qUnplanned = periodsWithData.reduce((s, r) => s + r.unplannedHours, 0)
+      const qUnplannedNonExternal = periodsWithData.reduce((s, r) => s + (r.unplannedNonExternalHours || 0), 0)
       const qTotalHours = qTotalHoursPerDevice * asset.quantity
       const qPct = qTotalHours > 0
-        ? Math.round(((qTotalHours - qUnplanned) / qTotalHours) * 10000) / 100
+        ? Math.floor(((qTotalHours - qUnplannedNonExternal) / qTotalHours) * 10000) / 100
         : 100
 
       return {
