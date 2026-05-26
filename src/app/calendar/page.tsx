@@ -53,7 +53,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<LocalWorkEvent[]>([])
   const [leaves, setLeaves] = useState<LocalLeave[]>([])
   const [users, setUsers] = useState<string[]>([])
-  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
+  const [vendorNames, setVendorNames] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -116,21 +116,25 @@ export default function CalendarPage() {
     if (!error && data) setUsers(data.map((u: { name: string }) => u.name))
   }, [])
 
-  const fetchVendors = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('vendors')
-      .select('id, name')
-      .order('name')
-    if (!error && data) setVendors(data as { id: string; name: string }[])
+  const fetchVendorNames = useCallback(async () => {
+    // 從 vendors 表 + work_events 已使用的廠商名稱合併去重
+    const [{ data: vData }, { data: eData }] = await Promise.all([
+      supabase.from('vendors').select('name').order('name'),
+      supabase.from('work_events').select('vendor'),
+    ])
+    const nameSet = new Set<string>()
+    vData?.forEach((v: { name: string }) => { if (v.name?.trim()) nameSet.add(v.name.trim()) })
+    eData?.forEach((e: { vendor: string }) => { if (e.vendor?.trim()) nameSet.add(e.vendor.trim()) })
+    setVendorNames([...nameSet].sort())
   }, [])
 
   useEffect(() => {
     async function init() {
-      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers(), fetchVendors()])
+      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers(), fetchVendorNames()])
       setLoading(false)
     }
     init()
-  }, [fetchEvents, fetchLeaves, fetchUsers, fetchVendors])
+  }, [fetchEvents, fetchLeaves, fetchUsers, fetchVendorNames])
 
   const calendarEvents = [
     ...events.map((e) => ({
@@ -521,8 +525,8 @@ export default function CalendarPage() {
             >
               <option value="">請選擇廠商</option>
               <option value="無">無</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.name}>{v.name}</option>
+              {vendorNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
           </div>
