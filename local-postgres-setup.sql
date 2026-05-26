@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS api.downtime_events (
   asset_name TEXT NOT NULL,
   event_type TEXT NOT NULL DEFAULT 'downtime',
   plan_type TEXT NOT NULL DEFAULT 'unplanned',
+  is_external BOOLEAN DEFAULT false,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
   start_time TIMESTAMPTZ NOT NULL,
@@ -197,6 +198,7 @@ CREATE TABLE IF NOT EXISTS api.circuit_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   circuit_id UUID NOT NULL,
   plan_type TEXT NOT NULL DEFAULT 'unplanned',
+  is_external BOOLEAN DEFAULT false,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
   start_time TIMESTAMPTZ NOT NULL,
@@ -222,6 +224,7 @@ CREATE TABLE IF NOT EXISTS api.vm_instances (
   disk2_gb TEXT DEFAULT '',
   disk3_gb TEXT DEFAULT '',
   note TEXT DEFAULT '',
+  is_owner_vm BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

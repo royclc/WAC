@@ -87,6 +87,7 @@ function getSupabase() {
   	  schema: 'api'
   	}
   })
+  return createClient(url, key)
 }
 
 export async function POST(req: NextRequest) {
