@@ -82,7 +82,11 @@ interface QueryBody {
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  return createClient(url, key)
+  return createClient(url, key, {
+  	db: {
+  	  schema: 'api'
+  	}
+  })
 }
 
 export async function POST(req: NextRequest) {
