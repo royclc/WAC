@@ -26,11 +26,6 @@ interface MaintenanceCategoryDef {
   sort_order: number
 }
 
-interface VendorItem {
-  id: string
-  name: string
-}
-
 interface MaintenanceEvent {
   id: string
   category_key: string
@@ -43,7 +38,7 @@ interface MaintenanceEvent {
 
 export default function MaintenancePage() {
   const [categories, setCategories] = useState<MaintenanceCategoryDef[]>([])
-  const [vendors, setVendors] = useState<VendorItem[]>([])
+  const [vendorNames, setVendorNames] = useState<string[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [events, setEvents] = useState<MaintenanceEvent[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -68,12 +63,15 @@ export default function MaintenancePage() {
     if (data) setCategories(data)
   }, [])
 
-  const fetchVendors = useCallback(async () => {
-    const { data } = await supabase
-      .from('vendors')
-      .select('id, name')
-      .order('name')
-    if (data) setVendors(data)
+  const fetchVendorNames = useCallback(async () => {
+    const [{ data: vData }, { data: eData }] = await Promise.all([
+      supabase.from('vendors').select('name').order('name'),
+      supabase.from('maintenance_events').select('contractor'),
+    ])
+    const nameSet = new Set<string>()
+    vData?.forEach((v: { name: string }) => { if (v.name?.trim()) nameSet.add(v.name.trim()) })
+    eData?.forEach((e: { contractor: string }) => { if (e.contractor?.trim()) nameSet.add(e.contractor.trim()) })
+    setVendorNames([...nameSet].sort())
   }, [])
 
   const fetchEvents = useCallback(async () => {
@@ -87,11 +85,11 @@ export default function MaintenancePage() {
   useEffect(() => {
     async function init() {
       setLoading(true)
-      await Promise.all([fetchCategories(), fetchVendors(), fetchEvents()])
+      await Promise.all([fetchCategories(), fetchVendorNames(), fetchEvents()])
       setLoading(false)
     }
     init()
-  }, [fetchCategories, fetchVendors, fetchEvents])
+  }, [fetchCategories, fetchVendorNames, fetchEvents])
 
   // Helper: get category info
   function getCat(key: string) {
@@ -508,11 +506,11 @@ export default function MaintenancePage() {
             <label className="block text-sm font-medium mb-1">廠商 *</label>
             <select value={formContractor} onChange={(e) => setFormContractor(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
               <option value="">請選擇廠商</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.name}>{v.name}</option>
+              {vendorNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
-            <p className="text-xs text-[var(--color-text-muted)] mt-1">廠商清單來自「管理 &gt; 廠商管理」</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">廠商清單來自「廠商管理」+「已使用廠商」，不重複</p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">說明</label>
