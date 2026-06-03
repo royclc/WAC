@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS api.office_assets (
   is_cht_asset BOOLEAN DEFAULT false,
   user_name TEXT DEFAULT '',
   note TEXT DEFAULT '',
+  tax_property_number TEXT DEFAULT '',
   property_number TEXT DEFAULT '',
   cht_asset_id TEXT DEFAULT '',
   network_zone TEXT DEFAULT '',

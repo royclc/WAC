@@ -13,6 +13,7 @@ interface OfficeAsset {
   is_cht_asset: boolean
   user_name: string
   note: string
+  tax_property_number: string
   property_number: string
   cht_asset_id: string
   network_zone: string
@@ -40,6 +41,7 @@ export default function OfficeAssetsPage() {
   const [formIsCht, setFormIsCht] = useState(false)
   const [formUser, setFormUser] = useState('')
   const [formNote, setFormNote] = useState('')
+  const [formTaxPropNum, setFormTaxPropNum] = useState('')
   const [formProp1, setFormProp1] = useState('')
   const [formProp2, setFormProp2] = useState('')
   const [formProp3, setFormProp3] = useState('')
@@ -72,6 +74,7 @@ export default function OfficeAssetsPage() {
         a.user_name.toLowerCase().includes(q) ||
         a.hostname.toLowerCase().includes(q) ||
         a.ip_address.includes(q) ||
+        (a.tax_property_number || '').includes(q) ||
         a.property_number.includes(q) ||
         a.cht_asset_id.toLowerCase().includes(q) ||
         a.note.toLowerCase().includes(q)
@@ -85,7 +88,7 @@ export default function OfficeAssetsPage() {
 
   function resetForm() {
     setFormType('主機'); setFormTypeOther(''); setFormIsCht(false)
-    setFormUser(''); setFormNote(''); setFormProp1(''); setFormProp2(''); setFormProp3(''); setFormChtId('')
+    setFormUser(''); setFormNote(''); setFormTaxPropNum(''); setFormProp1(''); setFormProp2(''); setFormProp3(''); setFormChtId('')
     setFormZone(''); setFormIp(''); setFormHostname('')
   }
 
@@ -99,7 +102,7 @@ export default function OfficeAssetsPage() {
     setEditing(a)
     setFormType(a.asset_type); setFormTypeOther(a.asset_type_other)
     setFormIsCht(a.is_cht_asset); setFormUser(a.user_name)
-    setFormNote(a.note)
+    setFormNote(a.note); setFormTaxPropNum(a.tax_property_number || '')
     const parts = (a.property_number || '').split('-')
     setFormProp1(parts[0] || ''); setFormProp2(parts[1] || ''); setFormProp3(parts[2] || '')
     setFormChtId(a.cht_asset_id); setFormZone(a.network_zone)
@@ -118,6 +121,7 @@ export default function OfficeAssetsPage() {
       is_cht_asset: formIsCht,
       user_name: formUser.trim(),
       note: formNote.trim(),
+      tax_property_number: !formIsCht ? formTaxPropNum.trim() : '',
       property_number: formIsCht && (formProp1 || formProp2 || formProp3) ? [formProp1.trim(), formProp2.trim(), formProp3.trim()].join('-') : '',
       cht_asset_id: formIsCht ? formChtId.trim() : '',
       network_zone: NEEDS_NETWORK.includes(formType) ? formZone : '',
@@ -188,6 +192,7 @@ export default function OfficeAssetsPage() {
                 <th className="text-left px-4 py-3 font-medium">資產類型</th>
                 <th className="text-left px-4 py-3 font-medium">中華資產</th>
                 <th className="text-left px-4 py-3 font-medium">使用者</th>
+                <th className="text-left px-4 py-3 font-medium">國稅局編號</th>
                 <th className="text-left px-4 py-3 font-medium">財產編號</th>
                 <th className="text-left px-4 py-3 font-medium">資產ID</th>
                 <th className="text-left px-4 py-3 font-medium">網段</th>
@@ -212,6 +217,7 @@ export default function OfficeAssetsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">{a.user_name}</td>
+                  <td className="px-4 py-3 text-xs font-mono">{a.tax_property_number || '—'}</td>
                   <td className="px-4 py-3 text-xs font-mono">{a.property_number || '—'}</td>
                   <td className="px-4 py-3 text-xs font-mono">{a.cht_asset_id || '—'}</td>
                   <td className="px-4 py-3">{a.network_zone || '—'}</td>
@@ -258,6 +264,14 @@ export default function OfficeAssetsPage() {
             <input type="checkbox" id="chtAsset" checked={formIsCht} onChange={(e) => setFormIsCht(e.target.checked)} className="w-4 h-4 rounded border-[var(--color-border)]" />
             <label htmlFor="chtAsset" className="text-sm font-medium">是否為中華資產</label>
           </div>
+
+          {/* 非中華資產：國稅局財產編號 */}
+          {!formIsCht && (
+            <div>
+              <label className="block text-sm font-medium mb-1">國稅局財產編號</label>
+              <input value={formTaxPropNum} onChange={(e) => setFormTaxPropNum(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono text-sm" placeholder="國稅局財產編號" />
+            </div>
+          )}
 
           {/* 中華資產欄位 */}
           {formIsCht && (
