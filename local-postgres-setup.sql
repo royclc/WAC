@@ -247,6 +247,22 @@ CREATE TABLE IF NOT EXISTS api.service_changes (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- ── 辦公室資產 ──
+CREATE TABLE IF NOT EXISTS api.office_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asset_type TEXT NOT NULL DEFAULT '主機',
+  asset_type_other TEXT DEFAULT '',
+  is_cht_asset BOOLEAN DEFAULT false,
+  user_name TEXT DEFAULT '',
+  note TEXT DEFAULT '',
+  property_number TEXT DEFAULT '',
+  cht_asset_id TEXT DEFAULT '',
+  network_zone TEXT DEFAULT '',
+  ip_address TEXT DEFAULT '',
+  hostname TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ============================================
 -- 登入驗證 Function
 -- ============================================

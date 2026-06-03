@@ -52,6 +52,7 @@ const ALLOWED_TABLES = new Set([
   'event_types',
   'vm_instances',
   'service_changes',
+  'office_assets',
 ])
 
 // ── 支援的 filter 運算子 ──
