@@ -231,7 +231,7 @@ export default function OfficeAssetsPage() {
       </div>
 
       {/* ── Modal ── */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editing ? '編輯資產' : '新增資產'}>
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editing ? '編輯資產' : '新增資產'} width="max-w-xl">
         <div className="space-y-4">
           {/* 資產類型 */}
           <div>
@@ -264,12 +264,12 @@ export default function OfficeAssetsPage() {
             <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800/30 space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">財產編號</label>
-                <div className="flex items-center gap-1">
-                  <input value={formProp1} onChange={(e) => setFormProp1(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono" placeholder="3010103" maxLength={10} />
-                  <span className="text-lg font-bold text-[var(--color-text-muted)]">-</span>
-                  <input value={formProp2} onChange={(e) => setFormProp2(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono" placeholder="0148629" maxLength={10} />
-                  <span className="text-lg font-bold text-[var(--color-text-muted)]">-</span>
-                  <input value={formProp3} onChange={(e) => setFormProp3(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono" placeholder="000" maxLength={5} />
+                <div className="flex items-center gap-1.5">
+                  <input value={formProp1} onChange={(e) => setFormProp1(e.target.value)} className="w-[5.5rem] px-2 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono text-sm" placeholder="3010103" maxLength={10} />
+                  <span className="text-base font-bold text-[var(--color-text-muted)]">-</span>
+                  <input value={formProp2} onChange={(e) => setFormProp2(e.target.value)} className="w-[5.5rem] px-2 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono text-sm" placeholder="0148629" maxLength={10} />
+                  <span className="text-base font-bold text-[var(--color-text-muted)]">-</span>
+                  <input value={formProp3} onChange={(e) => setFormProp3(e.target.value)} className="w-14 px-2 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono text-sm" placeholder="000" maxLength={5} />
                 </div>
               </div>
               <div>
