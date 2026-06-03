@@ -18,6 +18,7 @@ import {
   Activity,
   Server,
   FileText,
+  Monitor,
 } from 'lucide-react'
 
 const navItems = [
@@ -38,6 +39,7 @@ const adminItems = [
   { href: '/admin/circuits', label: '線路管理', icon: Cable },
   { href: '/admin/vendors', label: '廠商管理', icon: Store },
   { href: '/admin/event-types', label: '事件類型管理', icon: Tag },
+  { href: '/admin/office-assets', label: '辦公室資產', icon: Monitor },
   { href: '/admin/users', label: '使用者管理', icon: Users },
 ]
 
