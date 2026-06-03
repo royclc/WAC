@@ -40,7 +40,9 @@ export default function OfficeAssetsPage() {
   const [formIsCht, setFormIsCht] = useState(false)
   const [formUser, setFormUser] = useState('')
   const [formNote, setFormNote] = useState('')
-  const [formPropNum, setFormPropNum] = useState('')
+  const [formProp1, setFormProp1] = useState('')
+  const [formProp2, setFormProp2] = useState('')
+  const [formProp3, setFormProp3] = useState('')
   const [formChtId, setFormChtId] = useState('')
   const [formZone, setFormZone] = useState('')
   const [formIp, setFormIp] = useState('')
@@ -83,7 +85,7 @@ export default function OfficeAssetsPage() {
 
   function resetForm() {
     setFormType('主機'); setFormTypeOther(''); setFormIsCht(false)
-    setFormUser(''); setFormNote(''); setFormPropNum(''); setFormChtId('')
+    setFormUser(''); setFormNote(''); setFormProp1(''); setFormProp2(''); setFormProp3(''); setFormChtId('')
     setFormZone(''); setFormIp(''); setFormHostname('')
   }
 
@@ -97,7 +99,9 @@ export default function OfficeAssetsPage() {
     setEditing(a)
     setFormType(a.asset_type); setFormTypeOther(a.asset_type_other)
     setFormIsCht(a.is_cht_asset); setFormUser(a.user_name)
-    setFormNote(a.note); setFormPropNum(a.property_number)
+    setFormNote(a.note)
+    const parts = (a.property_number || '').split('-')
+    setFormProp1(parts[0] || ''); setFormProp2(parts[1] || ''); setFormProp3(parts[2] || '')
     setFormChtId(a.cht_asset_id); setFormZone(a.network_zone)
     setFormIp(a.ip_address); setFormHostname(a.hostname)
     setShowModal(true)
@@ -114,7 +118,7 @@ export default function OfficeAssetsPage() {
       is_cht_asset: formIsCht,
       user_name: formUser.trim(),
       note: formNote.trim(),
-      property_number: formIsCht ? formPropNum.trim() : '',
+      property_number: formIsCht && (formProp1 || formProp2 || formProp3) ? [formProp1.trim(), formProp2.trim(), formProp3.trim()].join('-') : '',
       cht_asset_id: formIsCht ? formChtId.trim() : '',
       network_zone: NEEDS_NETWORK.includes(formType) ? formZone : '',
       ip_address: NEEDS_NETWORK.includes(formType) && NEEDS_IP.includes(formZone) ? formIp.trim() : '',
@@ -257,10 +261,16 @@ export default function OfficeAssetsPage() {
 
           {/* 中華資產欄位 */}
           {formIsCht && (
-            <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800/30">
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800/30 space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">財產編號</label>
-                <input value={formPropNum} onChange={(e) => setFormPropNum(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" placeholder="3010103-0148629-000" />
+                <div className="flex items-center gap-1">
+                  <input value={formProp1} onChange={(e) => setFormProp1(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono" placeholder="3010103" maxLength={10} />
+                  <span className="text-lg font-bold text-[var(--color-text-muted)]">-</span>
+                  <input value={formProp2} onChange={(e) => setFormProp2(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono" placeholder="0148629" maxLength={10} />
+                  <span className="text-lg font-bold text-[var(--color-text-muted)]">-</span>
+                  <input value={formProp3} onChange={(e) => setFormProp3(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg text-center font-mono" placeholder="000" maxLength={5} />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">資產ID</label>
