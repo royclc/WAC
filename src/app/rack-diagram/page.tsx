@@ -484,10 +484,7 @@ export default function RackDiagramPage() {
   const selectedRack = racks.find((r) => r.id === selectedRackId) || null
   const selectedDevices = selectedRack ? (assetsByRack.get(selectedRack.name) || []) : []
 
-  // Auto-select first rack
-  useEffect(() => {
-    if (!selectedRackId && racks.length > 0) setSelectedRackId(racks[0].id)
-  }, [racks, selectedRackId])
+  // No auto-select — sidebar only appears on click
 
   // ── Rack CRUD ──
   function openNewRack() {
