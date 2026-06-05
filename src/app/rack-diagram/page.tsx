@@ -68,32 +68,14 @@ function RackThumb({ rack, devices, selected, onClick }: {
   const usedU = devices.reduce((s, d) => s + (d.rack_u_size || 1), 0)
   const pct = totalU > 0 ? Math.round((usedU / totalU) * 100) : 0
 
-  // Build U slots for thumbnail
-  const slots = new Array(totalU).fill(null)
-  devices.forEach((d) => {
-    if (d.rack_u_start > 0) {
-      for (let u = d.rack_u_start; u < d.rack_u_start + (d.rack_u_size || 1); u++) {
-        if (u <= totalU) slots[u - 1] = d
-      }
-    }
-  })
+  // Sort devices top-down (highest U first)
+  const sorted = [...devices].filter(d => d.rack_u_start > 0).sort((a, b) => b.rack_u_start - a.rack_u_start)
 
-  // Group into visual bars (top-down, 2 rows per visual bar for compact view)
-  const barCount = Math.ceil(totalU / 2)
-  const bars: (string | null)[] = []
-  for (let i = 0; i < barCount; i++) {
-    const u1 = totalU - i * 2  // top-down
-    const u2 = totalU - i * 2 - 1
-    const d1 = u1 > 0 ? slots[u1 - 1] : null
-    const d2 = u2 > 0 ? slots[u2 - 1] : null
-    const d = d1 || d2
-    bars.push(d ? getDeviceColor(d.category_key) : null)
-  }
-
-  const W = 180, H = 200
-  const barH = Math.max(2, Math.min(6, (H - 70) / barCount))
-  const barW = W - 40
-  const startY = 55
+  const W = 180, H = 190
+  const rackTop = 52, rackBottom = H - 28
+  const rackHeight = rackBottom - rackTop
+  const barX = 16, barW = W - 32
+  const scale = rackHeight / totalU  // px per U
 
   return (
     <div
@@ -107,25 +89,25 @@ function RackThumb({ rack, devices, selected, onClick }: {
     >
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         {/* Rack label */}
-        <text x="12" y="22" fill="var(--color-text-muted)" fontSize="11" fontFamily="monospace">{rack.name}</text>
-        <text x="12" y="42" fill="var(--color-text)" fontSize="14" fontWeight="bold">{rack.label || rack.name}</text>
+        <text x="14" y="22" fill="var(--color-text-muted)" fontSize="11" fontFamily="monospace">{rack.name}</text>
+        <text x="14" y="42" fill="var(--color-text)" fontSize="15" fontWeight="bold">{rack.label || rack.name}</text>
 
-        {/* Bars */}
-        {bars.map((color, i) => (
-          <rect
-            key={i}
-            x={20}
-            y={startY + i * (barH + 1)}
-            width={barW}
-            height={barH}
-            rx={1}
-            fill={color || EMPTY_COLOR}
-            opacity={color ? 0.85 : 0.25}
-          />
-        ))}
+        {/* Rack background frame */}
+        <rect x={barX - 2} y={rackTop - 2} width={barW + 4} height={rackHeight + 4} rx={3} fill="#1a1f2b" stroke="#2d3340" strokeWidth={1} />
+
+        {/* Device bars - only actual devices, positioned by U */}
+        {sorted.map((d) => {
+          const uTop = d.rack_u_start + (d.rack_u_size || 1) - 1
+          const y = rackBottom - uTop * scale
+          const h = Math.max(3, (d.rack_u_size || 1) * scale - 1)
+          const color = getDeviceColor(d.category_key)
+          return (
+            <rect key={d.id} x={barX} y={y} width={barW} height={h} rx={2} fill={color} opacity={0.9} />
+          )
+        })}
 
         {/* Usage text */}
-        <text x="12" y={H - 12} fill="var(--color-text-muted)" fontSize="11">
+        <text x="14" y={H - 8} fill="var(--color-text-muted)" fontSize="11">
           {usedU}U / {totalU}U ({pct}%)
         </text>
       </svg>
