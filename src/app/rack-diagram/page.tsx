@@ -88,24 +88,24 @@ function RackThumb({ rack, devices, selected, onClick }: {
       className={`cursor-pointer rounded-xl border-2 transition-all duration-200 hover:scale-[1.02] ${
         selected
           ? 'border-[var(--color-primary)] shadow-lg shadow-[var(--color-primary)]/20'
-          : 'border-[#2d3340] hover:border-[#4B5563]'
+          : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)]'
       }`}
-      style={{ width: W, background: '#1e2330' }}
+      style={{ width: W, background: 'var(--color-card)' }}
     >
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         {/* Rack label */}
-        <text x="14" y="22" fill="#9CA3AF" fontSize="11" fontFamily="monospace">{rack.name}</text>
-        <text x="14" y="44" fill="#E5E7EB" fontSize="15" fontWeight="bold">{rack.label || rack.name}</text>
+        <text x="14" y="22" fill="var(--color-text-muted)" fontSize="11" fontFamily="monospace">{rack.name}</text>
+        <text x="14" y="44" fill="var(--color-text)" fontSize="15" fontWeight="bold">{rack.label || rack.name}</text>
 
         {/* Rack inner panel */}
-        <rect x={barX - 1} y={rackTop - 1} width={barW + 2} height={rackHeight + 2} rx={3} fill="#13161e" stroke="#2a2f3a" strokeWidth={0.5} />
+        <rect x={barX - 1} y={rackTop - 1} width={barW + 2} height={rackHeight + 2} rx={3} fill="var(--color-bg)" stroke="var(--color-border)" strokeWidth={0.5} />
 
         {/* Empty U grid lines */}
         {Array.from({ length: totalU }, (_, i) => i + 1).map((u) => {
           if (occupied.has(u)) return null
           const y = rackBottom - u * scale
           return (
-            <line key={`g-${u}`} x1={barX + 1} y1={y + scale * 0.5} x2={barX + barW - 1} y2={y + scale * 0.5} stroke="#2a2f3a" strokeWidth={0.8} />
+            <line key={`g-${u}`} x1={barX + 1} y1={y + scale * 0.5} x2={barX + barW - 1} y2={y + scale * 0.5} stroke="var(--color-border)" strokeWidth={0.6} opacity={0.5} />
           )
         })}
 
@@ -121,7 +121,7 @@ function RackThumb({ rack, devices, selected, onClick }: {
         })}
 
         {/* Usage text */}
-        <text x="14" y={H - 8} fill="#9CA3AF" fontSize="11">
+        <text x="14" y={H - 8} fill="var(--color-text-muted)" fontSize="11">
           {usedU}U / {totalU}U ({pct}%)
         </text>
       </svg>
