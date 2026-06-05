@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Loader2, Plus, Pencil, Trash2, List, Box, ZoomIn, ZoomOut } from 'lucide-react'
+import { Loader2, Plus, Pencil, Trash2, List, Box, ZoomIn, ZoomOut, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // ── Types ──
@@ -554,9 +554,9 @@ export default function RackDiagramPage() {
         ))}
       </div>
 
-      <div className="flex gap-6" style={{ minHeight: 500 }}>
-        {/* Left: Floor Plan */}
-        <div className="flex-1 min-w-0" ref={floorRef}>
+      <div>
+        {/* Floor Plan */}
+        <div ref={floorRef}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-[var(--color-text-muted)]">機房平面圖</h2>
             <div className="flex items-center gap-2">
@@ -609,41 +609,56 @@ export default function RackDiagramPage() {
           )}
         </div>
 
-        {/* Right: Detail Panel */}
-        {selectedRack && (
-          <div className="w-[380px] shrink-0">
-            {/* View toggle */}
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => setViewMode('rack')}
-                className={`px-3 py-1.5 text-sm rounded-lg border flex items-center gap-1.5 transition-colors ${
-                  viewMode === 'rack'
-                    ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]'
-                }`}
-              >
-                <Box className="w-3.5 h-3.5" /> 機櫃視圖
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 text-sm rounded-lg border flex items-center gap-1.5 transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]'
-                }`}
-              >
-                <List className="w-3.5 h-3.5" /> 設備清單
-              </button>
-            </div>
-
-            {viewMode === 'rack' ? (
-              <RackDetail rack={selectedRack} devices={selectedDevices} />
-            ) : (
-              <DeviceList rack={selectedRack} devices={selectedDevices} />
-            )}
-          </div>
-        )}
       </div>
+
+      {/* ── Sidebar overlay ── */}
+      {selectedRack && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]" onClick={() => setSelectedRackId(null)} />
+          {/* Sidebar */}
+          <div className="fixed top-0 right-0 z-50 h-full w-[420px] max-w-[90vw] bg-[var(--color-modal-bg)] border-l border-[var(--color-border)] shadow-2xl flex flex-col animate-slide-in-right">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)] shrink-0">
+              <div>
+                <h3 className="text-lg font-bold">{selectedRack.name}</h3>
+                <p className="text-sm text-[var(--color-text-muted)]">{selectedRack.label}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex bg-[var(--color-bg-elevated)] rounded-lg p-0.5">
+                  <button
+                    onClick={() => setViewMode('rack')}
+                    className={`px-2.5 py-1 text-xs rounded-md flex items-center gap-1 transition-colors ${
+                      viewMode === 'rack' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    <Box className="w-3 h-3" /> 機櫃
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-2.5 py-1 text-xs rounded-md flex items-center gap-1 transition-colors ${
+                      viewMode === 'list' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    <List className="w-3 h-3" /> 清單
+                  </button>
+                </div>
+                <button onClick={() => setSelectedRackId(null)} className="p-1.5 hover:bg-[var(--color-hover)] rounded-lg">
+                  <X className="w-5 h-5 text-[var(--color-text-muted)]" />
+                </button>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {viewMode === 'rack' ? (
+                <RackDetail rack={selectedRack} devices={selectedDevices} />
+              ) : (
+                <DeviceList rack={selectedRack} devices={selectedDevices} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Rack CRUD Modal */}
       <Modal open={showRackModal} onClose={() => setShowRackModal(false)} title={editingRack ? '編輯機櫃' : '新增機櫃'}>
