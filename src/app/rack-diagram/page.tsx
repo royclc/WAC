@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Loader2, Plus, Pencil, Trash2, List, Box } from 'lucide-react'
+import { Loader2, Plus, Pencil, Trash2, List, Box, ZoomIn, ZoomOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // ── Types ──
@@ -405,6 +405,7 @@ export default function RackDiagramPage() {
   const [loading, setLoading] = useState(true)
   const [selectedRackId, setSelectedRackId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'rack' | 'list'>('rack')
+  const [zoom, setZoom] = useState(100) // percentage
 
   // Rack CRUD
   const [showRackModal, setShowRackModal] = useState(false)
@@ -527,38 +528,56 @@ export default function RackDiagramPage() {
       <div className="flex gap-6" style={{ minHeight: 500 }}>
         {/* Left: Floor Plan */}
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-[var(--color-text-muted)] mb-3">機房平面圖</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[var(--color-text-muted)]">機房平面圖</h2>
+            {/* Zoom control */}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setZoom((z) => Math.max(40, z - 10))} className="p-1 hover:bg-[var(--color-hover)] rounded" title="縮小">
+                <ZoomOut className="w-4 h-4 text-[var(--color-text-muted)]" />
+              </button>
+              <input
+                type="range" min={40} max={120} step={5} value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="w-20 h-1 accent-[var(--color-primary)] cursor-pointer"
+              />
+              <button onClick={() => setZoom((z) => Math.min(120, z + 10))} className="p-1 hover:bg-[var(--color-hover)] rounded" title="放大">
+                <ZoomIn className="w-4 h-4 text-[var(--color-text-muted)]" />
+              </button>
+              <span className="text-xs text-[var(--color-text-dim)] w-8 text-right">{zoom}%</span>
+            </div>
+          </div>
           {racks.length === 0 ? (
             <div className="text-center py-12 text-[var(--color-text-muted)]">
               尚無機櫃，請點擊「新增機櫃」
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {[...racksByRow.entries()].map(([rowName, rowRacks]) => (
                 <div key={rowName}>
                   {racksByRow.size > 1 && (
-                    <p className="text-xs text-[var(--color-text-dim)] mb-2 uppercase tracking-wider font-semibold">{rowName} 列</p>
+                    <p className="text-xs text-[var(--color-text-dim)] mb-2 uppercase tracking-wider font-semibold">{rowName} 列 <span className="opacity-50">({rowRacks.length})</span></p>
                   )}
-                  <div className="flex gap-3 flex-wrap">
-                    {rowRacks.map((rack) => (
-                      <div key={rack.id} className="relative group">
-                        <RackThumb
-                          rack={rack}
-                          devices={assetsByRack.get(rack.name) || []}
-                          selected={selectedRackId === rack.id}
-                          onClick={() => setSelectedRackId(rack.id)}
-                        />
-                        {/* Edit/Delete overlay */}
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); openEditRack(rack) }} className="p-1 bg-black/50 rounded hover:bg-black/70">
-                            <Pencil className="w-3 h-3 text-white" />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); removeRack(rack.id) }} className="p-1 bg-black/50 rounded hover:bg-red-600/70">
-                            <Trash2 className="w-3 h-3 text-white" />
-                          </button>
+                  <div className="overflow-x-auto pb-2 scrollbar-thin">
+                    <div className="flex gap-3" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left', width: `${10000 / zoom}%` }}>
+                      {rowRacks.map((rack) => (
+                        <div key={rack.id} className="relative group shrink-0">
+                          <RackThumb
+                            rack={rack}
+                            devices={assetsByRack.get(rack.name) || []}
+                            selected={selectedRackId === rack.id}
+                            onClick={() => setSelectedRackId(rack.id)}
+                          />
+                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); openEditRack(rack) }} className="p-1 bg-black/50 rounded hover:bg-black/70">
+                              <Pencil className="w-3 h-3 text-white" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); removeRack(rack.id) }} className="p-1 bg-black/50 rounded hover:bg-red-600/70">
+                              <Trash2 className="w-3 h-3 text-white" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
