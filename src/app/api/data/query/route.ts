@@ -53,6 +53,8 @@ const ALLOWED_TABLES = new Set([
   'vm_instances',
   'service_changes',
   'office_assets',
+  'racks',
+  'rack_devices',
 ])
 
 // ── 支援的 filter 運算子 ──

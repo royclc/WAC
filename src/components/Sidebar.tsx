@@ -20,6 +20,7 @@ import {
   FileText,
   Monitor,
   ChevronDown,
+  LayoutGrid,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -53,6 +54,13 @@ const navGroups: NavGroup[] = [
       { href: '/availability/server', label: '硬體可用率', icon: HardDrive },
       { href: '/availability/network', label: '網路可用率', icon: Wifi },
       { href: '/reports', label: '統計報表', icon: BarChart3 },
+    ],
+  },
+  {
+    key: 'facility',
+    label: '機房設施',
+    items: [
+      { href: '/rack-diagram', label: '機房機櫃圖', icon: LayoutGrid },
     ],
   },
 ]
