@@ -68,19 +68,32 @@ function RackThumb({ rack, devices, selected, onClick }: {
   const usedU = devices.reduce((s, d) => s + (d.rack_u_size || 1), 0)
   const pct = totalU > 0 ? Math.round((usedU / totalU) * 100) : 0
 
+  // Group devices by category, sorted by position (top→bottom)
   const sorted = [...devices].filter(d => d.rack_u_start > 0).sort((a, b) => b.rack_u_start - a.rack_u_start)
 
-  // Build occupied set
-  const occupied = new Set<number>()
-  devices.forEach((d) => {
-    for (let u = d.rack_u_start; u < d.rack_u_start + (d.rack_u_size || 1); u++) occupied.add(u)
+  // Merge adjacent/overlapping devices of same type into visual groups
+  const groups: { color: string; startU: number; endU: number; count: number }[] = []
+  sorted.forEach((d) => {
+    const color = getDeviceColor(d.category_key)
+    const startU = d.rack_u_start
+    const endU = d.rack_u_start + (d.rack_u_size || 1) - 1
+    const last = groups[groups.length - 1]
+    // Merge if same color and within 2U gap
+    if (last && last.color === color && last.startU - endU <= 2) {
+      last.startU = Math.min(last.startU, startU)
+      last.count++
+    } else {
+      groups.push({ color, startU, endU, count: 1 })
+    }
   })
 
-  const W = 185, H = 200
+  const W = 185, H = 195
   const rackTop = 54, rackBottom = H - 28
   const rackHeight = rackBottom - rackTop
-  const barX = 14, barW = W - 28
+  const barX = 16, barW = W - 32
   const scale = rackHeight / totalU
+  const BAR_H = 6  // fixed bar height
+  const BAR_GAP = 2
 
   return (
     <div
@@ -98,25 +111,25 @@ function RackThumb({ rack, devices, selected, onClick }: {
         <text x="14" y="44" fill="var(--color-text)" fontSize="15" fontWeight="bold">{rack.label || rack.name}</text>
 
         {/* Rack inner panel */}
-        <rect x={barX - 1} y={rackTop - 1} width={barW + 2} height={rackHeight + 2} rx={3} fill="var(--color-bg)" stroke="var(--color-border)" strokeWidth={0.5} />
+        <rect x={barX - 2} y={rackTop - 2} width={barW + 4} height={rackHeight + 4} rx={4} fill="var(--color-bg)" stroke="var(--color-border)" strokeWidth={0.5} />
 
-        {/* Empty U grid lines */}
-        {Array.from({ length: totalU }, (_, i) => i + 1).map((u) => {
-          if (occupied.has(u)) return null
+        {/* Sparse grid lines (every ~6U, just a few for aesthetics) */}
+        {[6, 12, 18, 24, 30, 36].filter(u => u < totalU).map((u) => {
           const y = rackBottom - u * scale
-          return (
-            <line key={`g-${u}`} x1={barX + 1} y1={y + scale * 0.5} x2={barX + barW - 1} y2={y + scale * 0.5} stroke="var(--color-border)" strokeWidth={0.6} opacity={0.5} />
-          )
+          return <line key={`g-${u}`} x1={barX} y1={y} x2={barX + barW} y2={y} stroke="var(--color-border)" strokeWidth={0.5} opacity={0.3} />
         })}
 
-        {/* Device bars */}
-        {sorted.map((d) => {
-          const uTop = d.rack_u_start + (d.rack_u_size || 1) - 1
-          const y = rackBottom - uTop * scale
-          const h = Math.max(3, (d.rack_u_size || 1) * scale - 1.5)
-          const color = getDeviceColor(d.category_key)
+        {/* Device group bars - each group rendered as N stacked bars */}
+        {groups.map((g, gi) => {
+          const midU = (g.startU + g.endU) / 2
+          const centerY = rackBottom - midU * scale
           return (
-            <rect key={d.id} x={barX + 1} y={y + 0.75} width={barW - 2} height={h} rx={1.5} fill={color} opacity={0.92} />
+            <g key={gi}>
+              {Array.from({ length: g.count }, (_, i) => {
+                const y = centerY - (g.count - 1) * (BAR_H + BAR_GAP) / 2 + i * (BAR_H + BAR_GAP)
+                return <rect key={i} x={barX} y={y - BAR_H / 2} width={barW} height={BAR_H} rx={2.5} fill={g.color} opacity={0.9} />
+              })}
+            </g>
           )
         })}
 
