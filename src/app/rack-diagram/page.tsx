@@ -471,14 +471,12 @@ export default function RackDiagramPage() {
     return rackRows.reduce((m, r) => Math.max(m, r.racks.length), 0)
   }, [rackRows])
 
-  // Auto-calculate zoom on first load so a full row fits
+  // Auto-calculate zoom: 10 racks → 60%, fewer racks → proportionally bigger
   useEffect(() => {
-    if (zoomInited || !floorRef.current || maxPerLine === 0) return
-    const containerW = floorRef.current.clientWidth
-    const neededW = maxPerLine * THUMB_W + (maxPerLine - 1) * THUMB_GAP
-    // 10 racks → 60%, proportionally larger for fewer racks, cap at 100%
-    const fit = Math.floor((containerW / neededW) * 100 * 0.90)
-    setZoom(Math.max(30, Math.min(fit, 100)))
+    if (zoomInited || maxPerLine === 0) return
+    // Fixed formula: 60% for 10 racks, scale up for fewer (e.g. 5→85%, 3→100%)
+    const target = Math.min(100, Math.round(600 / maxPerLine))
+    setZoom(Math.max(30, target))
     setZoomInited(true)
   }, [maxPerLine, zoomInited])
 
@@ -564,39 +562,41 @@ export default function RackDiagramPage() {
         </div>
       </div>
 
-      <div>
-        <div ref={floorRef}>
+      <div ref={floorRef} className="overflow-hidden">
+        <div>
           {racks.length === 0 ? (
             <div className="text-center py-12 text-[var(--color-text-muted)]">尚無機櫃，請點擊「新增機櫃」</div>
           ) : (
             <div className="space-y-2">
-              {rackRows.map((row, ri) => (
+              {rackRows.map((row) => (
                 <div key={`${row.rowName}-${row.subIndex}`}>
                   {row.subIndex === 0 && (
                     <p className="text-xs text-[var(--color-text-dim)] mb-1.5 uppercase tracking-wider font-semibold">
                       {row.rowName} 列 <span className="opacity-50">({row.totalInRow})</span>
                     </p>
                   )}
-                  <div style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left', height: `${195 * zoom / 100}px` }}>
-                    <div className="flex gap-3">
-                      {row.racks.map((rack) => (
-                        <div key={rack.id} className="relative group shrink-0">
-                          <RackThumb
-                            rack={rack}
-                            devices={assetsByRack.get(rack.name) || []}
-                            selected={selectedRackId === rack.id}
-                            onClick={() => setSelectedRackId(rack.id)}
-                          />
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); openEditRack(rack) }} className="p-1 bg-black/50 rounded hover:bg-black/70">
-                              <Pencil className="w-3 h-3 text-white" />
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); removeRack(rack.id) }} className="p-1 bg-black/50 rounded hover:bg-red-600/70">
-                              <Trash2 className="w-3 h-3 text-white" />
-                            </button>
+                  <div className="overflow-x-auto pb-1">
+                    <div style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left', height: `${195 * zoom / 100}px`, width: `${(row.racks.length * (THUMB_W + THUMB_GAP)) * zoom / 100}px` }}>
+                      <div className="flex gap-3">
+                        {row.racks.map((rack) => (
+                          <div key={rack.id} className="relative group shrink-0">
+                            <RackThumb
+                              rack={rack}
+                              devices={assetsByRack.get(rack.name) || []}
+                              selected={selectedRackId === rack.id}
+                              onClick={() => setSelectedRackId(rack.id)}
+                            />
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                              <button onClick={(e) => { e.stopPropagation(); openEditRack(rack) }} className="p-1 bg-black/50 rounded hover:bg-black/70">
+                                <Pencil className="w-3 h-3 text-white" />
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); removeRack(rack.id) }} className="p-1 bg-black/50 rounded hover:bg-red-600/70">
+                                <Trash2 className="w-3 h-3 text-white" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
