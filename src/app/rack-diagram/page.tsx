@@ -133,20 +133,22 @@ function RackThumb({ rack, devices, selected, onClick }: {
   )
 }
 
-// ── Rack Detail Side View ──
+// ── Rack Detail Side View (3D) ──
 function RackDetail({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
   const totalU = rack.total_u
-  const U_H = 14  // pixels per U
-  const RACK_W = 260
+  const U_H = 15
+  const RACK_W = 240
+  const RAIL_W = 14
+  const DEPTH = 10  // 3D depth offset
   const rackH = totalU * U_H
-  const PAD_TOP = 30
+  const PAD_TOP = 20
   const PAD_BOTTOM = 40
-  const svgH = rackH + PAD_TOP + PAD_BOTTOM
+  const PAD_LEFT = 32
+  const svgW = PAD_LEFT + RACK_W + DEPTH + 50
+  const svgH = rackH + PAD_TOP + PAD_BOTTOM + DEPTH
 
-  // Sort devices by start_u descending (top of rack = higher U)
   const sorted = [...devices].sort((a, b) => b.rack_u_start - a.rack_u_start)
 
-  // Build occupied map
   const occupied = new Set<number>()
   devices.forEach((d) => {
     for (let u = d.rack_u_start; u < d.rack_u_start + (d.rack_u_size || 1); u++) {
@@ -157,51 +159,146 @@ function RackDetail({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
   const usedU = devices.reduce((s, d) => s + (d.rack_u_size || 1), 0)
   const pct = totalU > 0 ? Math.round((usedU / totalU) * 100) : 0
 
+  // Positions
+  const frameX = PAD_LEFT
+  const frameY = PAD_TOP + DEPTH
+  const innerX = frameX + RAIL_W
+  const innerW = RACK_W - RAIL_W * 2
+
+  // Darken/lighten color helper
+  function shadeColor(hex: string, amt: number) {
+    const num = parseInt(hex.replace('#', ''), 16)
+    const r = Math.min(255, Math.max(0, (num >> 16) + amt))
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amt))
+    const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amt))
+    return `rgb(${r},${g},${b})`
+  }
+
   return (
     <div className="flex flex-col items-center">
-      <svg width={RACK_W + 80} height={svgH} viewBox={`0 0 ${RACK_W + 80} ${svgH}`}>
-        {/* Rack frame */}
-        <rect x={35} y={PAD_TOP} width={RACK_W} height={rackH} rx={4} fill="#1F2937" stroke="#4B5563" strokeWidth={1.5} />
+      <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
+        <defs>
+          {/* Rack back gradient */}
+          <linearGradient id="rackBack" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1a1f2e" />
+            <stop offset="100%" stopColor="#111827" />
+          </linearGradient>
+          {/* Rail gradient */}
+          <linearGradient id="railGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#4B5563" />
+            <stop offset="50%" stopColor="#6B7280" />
+            <stop offset="100%" stopColor="#4B5563" />
+          </linearGradient>
+          {/* Top face gradient */}
+          <linearGradient id="topFace" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#374151" />
+            <stop offset="100%" stopColor="#1F2937" />
+          </linearGradient>
+        </defs>
 
-        {/* U number labels (every 5U) */}
-        {Array.from({ length: totalU }, (_, i) => i + 1).filter(u => u % 5 === 0 || u === 1 || u === totalU).map((u) => {
-          const y = PAD_TOP + rackH - u * U_H + U_H / 2
+        {/* ── 3D Top face of rack ── */}
+        <polygon
+          points={`${frameX},${PAD_TOP + DEPTH} ${frameX + DEPTH},${PAD_TOP} ${frameX + RACK_W + DEPTH},${PAD_TOP} ${frameX + RACK_W},${PAD_TOP + DEPTH}`}
+          fill="url(#topFace)" stroke="#4B5563" strokeWidth={0.5}
+        />
+        {/* ── 3D Right side face ── */}
+        <polygon
+          points={`${frameX + RACK_W},${frameY} ${frameX + RACK_W + DEPTH},${PAD_TOP} ${frameX + RACK_W + DEPTH},${PAD_TOP + rackH} ${frameX + RACK_W},${frameY + rackH}`}
+          fill="#111318" stroke="#4B5563" strokeWidth={0.5}
+        />
+
+        {/* ── Rack back panel ── */}
+        <rect x={frameX} y={frameY} width={RACK_W} height={rackH} rx={2} fill="url(#rackBack)" stroke="#374151" strokeWidth={1} />
+
+        {/* ── Left Rail ── */}
+        <rect x={frameX} y={frameY} width={RAIL_W} height={rackH} fill="url(#railGrad)" opacity={0.6} />
+        {/* ── Right Rail ── */}
+        <rect x={frameX + RACK_W - RAIL_W} y={frameY} width={RAIL_W} height={rackH} fill="url(#railGrad)" opacity={0.6} />
+
+        {/* ── Rail screw holes (every 3U) ── */}
+        {Array.from({ length: totalU }, (_, i) => i + 1).filter(u => u % 3 === 0).map((u) => {
+          const cy = frameY + rackH - u * U_H + U_H / 2
           return (
-            <text key={u} x={18} y={y + 4} fill="#6B7280" fontSize="9" textAnchor="end" fontFamily="monospace">
+            <g key={`screw-${u}`}>
+              <circle cx={frameX + RAIL_W / 2} cy={cy} r={1.8} fill="#1F2937" stroke="#4B5563" strokeWidth={0.5} />
+              <circle cx={frameX + RACK_W - RAIL_W / 2} cy={cy} r={1.8} fill="#1F2937" stroke="#4B5563" strokeWidth={0.5} />
+            </g>
+          )
+        })}
+
+        {/* ── U number labels ── */}
+        {Array.from({ length: totalU }, (_, i) => i + 1).filter(u => u % 5 === 0 || u === 1 || u === totalU).map((u) => {
+          const y = frameY + rackH - u * U_H + U_H / 2
+          return (
+            <text key={u} x={PAD_LEFT - 5} y={y + 3.5} fill="#6B7280" fontSize="9" textAnchor="end" fontFamily="monospace">
               {u}
             </text>
           )
         })}
 
-        {/* Empty U slots (subtle lines) */}
+        {/* ── Empty U slots ── */}
         {Array.from({ length: totalU }, (_, i) => i + 1).map((u) => {
           if (occupied.has(u)) return null
-          const y = PAD_TOP + rackH - u * U_H
+          const y = frameY + rackH - u * U_H
           return (
-            <rect key={`empty-${u}`} x={40} y={y + 1} width={RACK_W - 10} height={U_H - 2} rx={1} fill={EMPTY_COLOR} opacity={0.15} />
+            <rect key={`empty-${u}`} x={innerX + 2} y={y + 1} width={innerW - 4} height={U_H - 2} rx={1} fill="#1F2937" opacity={0.5} />
           )
         })}
 
-        {/* Devices */}
+        {/* ── Devices (3D blocks) ── */}
         {sorted.map((d) => {
           if (d.rack_u_start <= 0) return null
-          const y = PAD_TOP + rackH - (d.rack_u_start + (d.rack_u_size || 1) - 1) * U_H
+          const y = frameY + rackH - (d.rack_u_start + (d.rack_u_size || 1) - 1) * U_H
           const h = (d.rack_u_size || 1) * U_H - 2
           const color = getDeviceColor(d.category_key)
+          const devX = innerX + 2
+          const devW = innerW - 4
+          const gradId = `dev-${d.id}`
+
           return (
             <g key={d.id}>
-              <rect x={40} y={y + 1} width={RACK_W - 10} height={h} rx={3} fill={color} opacity={0.8} />
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={shadeColor(color, 40)} />
+                  <stop offset="50%" stopColor={color} />
+                  <stop offset="100%" stopColor={shadeColor(color, -40)} />
+                </linearGradient>
+              </defs>
+
+              {/* Device body */}
+              <rect x={devX} y={y + 1} width={devW} height={h} rx={2} fill={`url(#${gradId})`} />
+
+              {/* Top highlight */}
+              <rect x={devX} y={y + 1} width={devW} height={Math.min(3, h * 0.25)} rx={2} fill="white" opacity={0.12} />
+
+              {/* Bottom shadow */}
+              <rect x={devX} y={y + h - 2} width={devW} height={2} rx={1} fill="black" opacity={0.2} />
+
+              {/* Left handle bar */}
+              <rect x={devX + 3} y={y + h * 0.3} width={3} height={h * 0.4} rx={1} fill="white" opacity={0.2} />
+
+              {/* Faceplate line */}
+              <line x1={devX} y1={y + h + 1} x2={devX + devW} y2={y + h + 1} stroke="black" opacity={0.15} strokeWidth={1} />
+
               {/* Device name */}
-              {h >= 10 && (
-                <text x={50} y={y + h / 2 + 4} fill="white" fontSize="11" fontWeight="500">
+              {h >= 12 && (
+                <text x={devX + 14} y={y + h / 2 + 4} fill="white" fontSize="11" fontWeight="600" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
                   {d.name}
                 </text>
               )}
-              {/* Status dot */}
-              <circle cx={RACK_W + 15} cy={y + h / 2 + 1} r={4} fill={d.is_active ? '#10B981' : '#6B7280'} />
+
+              {/* Status LED */}
+              <circle cx={devX + devW - 10} cy={y + h / 2 + 1} r={3.5} fill={d.is_active ? '#10B981' : '#6B7280'} />
+              {d.is_active && <circle cx={devX + devW - 10} cy={y + h / 2 + 1} r={3.5} fill="#10B981" opacity={0.4}>
+                <animate attributeName="opacity" values="0.4;0.1;0.4" dur="2s" repeatCount="indefinite" />
+              </circle>}
             </g>
           )
         })}
+
+        {/* ── Rack feet ── */}
+        <rect x={frameX + 4} y={frameY + rackH} width={16} height={5} rx={1} fill="#374151" />
+        <rect x={frameX + RACK_W - 20} y={frameY + rackH} width={16} height={5} rx={1} fill="#374151" />
       </svg>
       <div className="text-sm text-[var(--color-text-muted)] mt-1">
         {rack.name} · {rack.label} · {usedU}U used · {pct}% util
