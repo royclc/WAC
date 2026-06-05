@@ -476,8 +476,8 @@ export default function RackDiagramPage() {
     if (zoomInited || !floorRef.current || maxPerLine === 0) return
     const containerW = floorRef.current.clientWidth
     const neededW = maxPerLine * THUMB_W + (maxPerLine - 1) * THUMB_GAP
-    const fit = Math.floor((containerW / neededW) * 100)
-    setZoom(Math.max(30, Math.min(120, fit)))
+    const fit = Math.floor((containerW / neededW) * 92) // 92% to leave breathing room
+    setZoom(Math.max(30, Math.min(100, fit)))
     setZoomInited(true)
   }, [maxPerLine, zoomInited])
 
@@ -533,40 +533,38 @@ export default function RackDiagramPage() {
 
   return (
     <AppShell>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">機房機櫃圖</h1>
-        <button onClick={openNewRack} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
-          <Plus className="w-4 h-4" /> 新增機櫃
-        </button>
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
-        {LEGEND.map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm" style={{ background: l.color, opacity: l.label === '空位' ? 0.3 : 0.85 }} />
-            <span className="text-xs text-[var(--color-text-muted)]">{l.label}</span>
+      {/* Header: title + legend + controls in one row */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-6">
+          <h1 className="text-xl font-bold">機房機櫃圖</h1>
+          <div className="flex items-center gap-3">
+            {LEGEND.map((l) => (
+              <div key={l.label} className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: l.color, opacity: l.label === '空位' ? 0.3 : 0.85 }} />
+                <span className="text-[11px] text-[var(--color-text-muted)]">{l.label}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setZoom((z) => Math.max(30, z - 10))} className="p-1 hover:bg-[var(--color-hover)] rounded" title="縮小">
+              <ZoomOut className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+            </button>
+            <input type="range" min={30} max={120} step={5} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="w-20 h-1 accent-[var(--color-primary)] cursor-pointer" />
+            <button onClick={() => setZoom((z) => Math.min(120, z + 10))} className="p-1 hover:bg-[var(--color-hover)] rounded" title="放大">
+              <ZoomIn className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+            </button>
+            <span className="text-[11px] text-[var(--color-text-dim)] w-7 text-right">{zoom}%</span>
+          </div>
+          <button onClick={openNewRack} className="px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
+            <Plus className="w-3.5 h-3.5" /> 新增機櫃
+          </button>
+        </div>
       </div>
 
       <div>
-        {/* Floor Plan */}
         <div ref={floorRef}>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-[var(--color-text-muted)]">機房平面圖</h2>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setZoom((z) => Math.max(30, z - 10))} className="p-1 hover:bg-[var(--color-hover)] rounded" title="縮小">
-                <ZoomOut className="w-4 h-4 text-[var(--color-text-muted)]" />
-              </button>
-              <input type="range" min={30} max={120} step={5} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="w-24 h-1 accent-[var(--color-primary)] cursor-pointer" />
-              <button onClick={() => setZoom((z) => Math.min(120, z + 10))} className="p-1 hover:bg-[var(--color-hover)] rounded" title="放大">
-                <ZoomIn className="w-4 h-4 text-[var(--color-text-muted)]" />
-              </button>
-              <span className="text-xs text-[var(--color-text-dim)] w-8 text-right">{zoom}%</span>
-            </div>
-          </div>
           {racks.length === 0 ? (
             <div className="text-center py-12 text-[var(--color-text-muted)]">尚無機櫃，請點擊「新增機櫃」</div>
           ) : (
