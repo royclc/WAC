@@ -68,14 +68,19 @@ function RackThumb({ rack, devices, selected, onClick }: {
   const usedU = devices.reduce((s, d) => s + (d.rack_u_size || 1), 0)
   const pct = totalU > 0 ? Math.round((usedU / totalU) * 100) : 0
 
-  // Sort devices top-down (highest U first)
   const sorted = [...devices].filter(d => d.rack_u_start > 0).sort((a, b) => b.rack_u_start - a.rack_u_start)
 
-  const W = 180, H = 190
-  const rackTop = 52, rackBottom = H - 28
+  // Build occupied set
+  const occupied = new Set<number>()
+  devices.forEach((d) => {
+    for (let u = d.rack_u_start; u < d.rack_u_start + (d.rack_u_size || 1); u++) occupied.add(u)
+  })
+
+  const W = 185, H = 200
+  const rackTop = 54, rackBottom = H - 28
   const rackHeight = rackBottom - rackTop
-  const barX = 16, barW = W - 32
-  const scale = rackHeight / totalU  // px per U
+  const barX = 14, barW = W - 28
+  const scale = rackHeight / totalU
 
   return (
     <div
@@ -83,31 +88,40 @@ function RackThumb({ rack, devices, selected, onClick }: {
       className={`cursor-pointer rounded-xl border-2 transition-all duration-200 hover:scale-[1.02] ${
         selected
           ? 'border-[var(--color-primary)] shadow-lg shadow-[var(--color-primary)]/20'
-          : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)]'
+          : 'border-[#2d3340] hover:border-[#4B5563]'
       }`}
-      style={{ width: W, background: 'var(--color-card)' }}
+      style={{ width: W, background: '#1e2330' }}
     >
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         {/* Rack label */}
-        <text x="14" y="22" fill="var(--color-text-muted)" fontSize="11" fontFamily="monospace">{rack.name}</text>
-        <text x="14" y="42" fill="var(--color-text)" fontSize="15" fontWeight="bold">{rack.label || rack.name}</text>
+        <text x="14" y="22" fill="#9CA3AF" fontSize="11" fontFamily="monospace">{rack.name}</text>
+        <text x="14" y="44" fill="#E5E7EB" fontSize="15" fontWeight="bold">{rack.label || rack.name}</text>
 
-        {/* Rack background frame */}
-        <rect x={barX - 2} y={rackTop - 2} width={barW + 4} height={rackHeight + 4} rx={3} fill="#1a1f2b" stroke="#2d3340" strokeWidth={1} />
+        {/* Rack inner panel */}
+        <rect x={barX - 1} y={rackTop - 1} width={barW + 2} height={rackHeight + 2} rx={3} fill="#13161e" stroke="#2a2f3a" strokeWidth={0.5} />
 
-        {/* Device bars - only actual devices, positioned by U */}
+        {/* Empty U grid lines */}
+        {Array.from({ length: totalU }, (_, i) => i + 1).map((u) => {
+          if (occupied.has(u)) return null
+          const y = rackBottom - u * scale
+          return (
+            <line key={`g-${u}`} x1={barX + 1} y1={y + scale * 0.5} x2={barX + barW - 1} y2={y + scale * 0.5} stroke="#2a2f3a" strokeWidth={0.8} />
+          )
+        })}
+
+        {/* Device bars */}
         {sorted.map((d) => {
           const uTop = d.rack_u_start + (d.rack_u_size || 1) - 1
           const y = rackBottom - uTop * scale
-          const h = Math.max(3, (d.rack_u_size || 1) * scale - 1)
+          const h = Math.max(3, (d.rack_u_size || 1) * scale - 1.5)
           const color = getDeviceColor(d.category_key)
           return (
-            <rect key={d.id} x={barX} y={y} width={barW} height={h} rx={2} fill={color} opacity={0.9} />
+            <rect key={d.id} x={barX + 1} y={y + 0.75} width={barW - 2} height={h} rx={1.5} fill={color} opacity={0.92} />
           )
         })}
 
         {/* Usage text */}
-        <text x="14" y={H - 8} fill="var(--color-text-muted)" fontSize="11">
+        <text x="14" y={H - 8} fill="#9CA3AF" fontSize="11">
           {usedU}U / {totalU}U ({pct}%)
         </text>
       </svg>
