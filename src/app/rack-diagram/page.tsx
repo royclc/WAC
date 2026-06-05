@@ -476,8 +476,9 @@ export default function RackDiagramPage() {
     if (zoomInited || !floorRef.current || maxPerLine === 0) return
     const containerW = floorRef.current.clientWidth
     const neededW = maxPerLine * THUMB_W + (maxPerLine - 1) * THUMB_GAP
-    const fit = Math.floor((containerW / neededW) * 92) // 92% to leave breathing room
-    setZoom(Math.max(30, Math.min(100, fit)))
+    // 10 racks → 60%, proportionally larger for fewer racks, cap at 100%
+    const fit = Math.floor((containerW / neededW) * 100 * 0.90)
+    setZoom(Math.max(30, Math.min(fit, 100)))
     setZoomInited(true)
   }, [maxPerLine, zoomInited])
 
@@ -533,8 +534,8 @@ export default function RackDiagramPage() {
 
   return (
     <AppShell>
-      {/* Header: title + legend + controls in one row */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      {/* Header: title + legend + controls — sticky */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2 sticky top-0 z-30 bg-[var(--color-bg)] py-3 -mx-6 px-6 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-6">
           <h1 className="text-xl font-bold">機房機櫃圖</h1>
           <div className="flex items-center gap-3">
