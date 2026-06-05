@@ -20,6 +20,13 @@ interface ModelDef {
   name: string
 }
 
+interface RackOption {
+  id: string
+  name: string
+  label: string
+  total_u: number
+}
+
 interface HardwareAsset {
   id: string
   name: string
@@ -30,6 +37,8 @@ interface HardwareAsset {
   location: string
   description: string
   is_active: boolean
+  rack_u_start: number
+  rack_u_size: number
 }
 
 type PageTab = 'assets' | 'categories'
@@ -38,6 +47,7 @@ export default function ServersPage() {
   const [pageTab, setPageTab] = useState<PageTab>('assets')
   const [categories, setCategories] = useState<CategoryDef[]>([])
   const [assets, setAssets] = useState<HardwareAsset[]>([])
+  const [rackOptions, setRackOptions] = useState<RackOption[]>([])
   const [vendorOptions, setVendorOptions] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
@@ -55,6 +65,8 @@ export default function ServersPage() {
   const [formVendor, setFormVendor] = useState('')
   const [formIp, setFormIp] = useState('')
   const [formLocation, setFormLocation] = useState('')
+  const [formUStart, setFormUStart] = useState(0)
+  const [formUSize, setFormUSize] = useState(1)
   const [formDesc, setFormDesc] = useState('')
 
   // Category/Model management state
@@ -100,11 +112,16 @@ export default function ServersPage() {
   const fetchAssets = useCallback(async () => {
     const { data } = await supabase
       .from('hardware_assets')
-      .select('id, name, category_key, model, vendor, ip_address, location, description, is_active')
+      .select('id, name, category_key, model, vendor, ip_address, location, description, is_active, rack_u_start, rack_u_size')
 
     if (data) {
-      setAssets(data.map((a) => ({ ...a, category: a.category_key })))
+      setAssets(data.map((a) => ({ ...a, category: a.category_key, rack_u_start: a.rack_u_start || 0, rack_u_size: a.rack_u_size || 1 })))
     }
+  }, [])
+
+  const fetchRacks = useCallback(async () => {
+    const { data } = await supabase.from('racks').select('id, name, label, total_u').order('sort_order').order('name')
+    if (data) setRackOptions(data)
   }, [])
 
   const fetchVendors = useCallback(async () => {
@@ -115,11 +132,11 @@ export default function ServersPage() {
   useEffect(() => {
     async function init() {
       setLoading(true)
-      await Promise.all([fetchCategories(), fetchAssets(), fetchVendors()])
+      await Promise.all([fetchCategories(), fetchAssets(), fetchVendors(), fetchRacks()])
       setLoading(false)
     }
     init()
-  }, [fetchCategories, fetchAssets, fetchVendors])
+  }, [fetchCategories, fetchAssets, fetchVendors, fetchRacks])
 
   // Helper: get models for a category key
   function getModelsForCategory(catKey: string): string[] {
@@ -154,13 +171,13 @@ export default function ServersPage() {
   function openNew() {
     setEditingAsset(null)
     const firstCat = categories[0]
-    setFormName(''); setFormCategory(firstCat?.key || ''); setFormModel(firstCat?.models[0]?.name || ''); setFormVendor(vendorOptions[0] || ''); setFormIp(''); setFormLocation(''); setFormDesc('')
+    setFormName(''); setFormCategory(firstCat?.key || ''); setFormModel(firstCat?.models[0]?.name || ''); setFormVendor(vendorOptions[0] || ''); setFormIp(''); setFormLocation(''); setFormUStart(0); setFormUSize(1); setFormDesc('')
     setShowModal(true)
   }
 
   function openEdit(asset: HardwareAsset) {
     setEditingAsset(asset)
-    setFormName(asset.name); setFormCategory(asset.category); setFormModel(asset.model); setFormVendor(asset.vendor); setFormIp(asset.ip_address); setFormLocation(asset.location); setFormDesc(asset.description)
+    setFormName(asset.name); setFormCategory(asset.category); setFormModel(asset.model); setFormVendor(asset.vendor); setFormIp(asset.ip_address); setFormLocation(asset.location); setFormUStart(asset.rack_u_start || 0); setFormUSize(asset.rack_u_size || 1); setFormDesc(asset.description)
     setShowModal(true)
   }
 
@@ -169,7 +186,8 @@ export default function ServersPage() {
     setSaving(true)
     const payload = {
       name: formName, category_key: formCategory, model: formModel, vendor: formVendor,
-      ip_address: formIp, location: formLocation, description: formDesc, is_active: true,
+      ip_address: formIp, location: formLocation, rack_u_start: formUStart, rack_u_size: formUSize,
+      description: formDesc, is_active: true,
     }
     if (editingAsset) {
       await supabase.from('hardware_assets').update(payload).eq('id', editingAsset.id)
@@ -410,7 +428,14 @@ export default function ServersPage() {
                             <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{asset.vendor}</span>
                           </td>
                           <td className="px-4 py-3 font-mono text-xs">{asset.ip_address}</td>
-                          <td className="px-4 py-3">{asset.location}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {asset.location || '—'}
+                            {asset.location && asset.rack_u_start > 0 && (
+                              <span className="text-xs text-[var(--color-text-muted)] ml-1">
+                                U{asset.rack_u_start}{asset.rack_u_size > 1 ? `-${asset.rack_u_start + asset.rack_u_size - 1}` : ''}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">{asset.description}</td>
                           <td className="px-4 py-3 text-right">
                             <button onClick={() => openEdit(asset)} className="p-1 hover:bg-[var(--color-hover)] rounded mr-1"><Pencil className="w-4 h-4" /></button>
@@ -533,14 +558,28 @@ export default function ServersPage() {
             <label className="block text-sm font-medium mb-1">名稱 *</label>
             <input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">IP 位址</label>
-              <input value={formIp} onChange={(e) => setFormIp(e.target.value)} placeholder="192.168.1.1" className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">位置</label>
-              <input value={formLocation} onChange={(e) => setFormLocation(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+          <div>
+            <label className="block text-sm font-medium mb-1">IP 位址</label>
+            <input value={formIp} onChange={(e) => setFormIp(e.target.value)} placeholder="192.168.1.1" className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">機櫃位置</label>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <select value={formLocation} onChange={(e) => setFormLocation(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
+                  <option value="">未指定</option>
+                  {rackOptions.map((r) => <option key={r.id} value={r.name}>{r.name}{r.label ? ` (${r.label})` : ''}</option>)}
+                </select>
+                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">機櫃</p>
+              </div>
+              <div>
+                <input type="number" value={formUStart || ''} onChange={(e) => setFormUStart(Number(e.target.value))} min={0} max={60} placeholder="0" className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">起始 U</p>
+              </div>
+              <div>
+                <input type="number" value={formUSize} onChange={(e) => setFormUSize(Number(e.target.value))} min={1} max={20} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+                <p className="text-xs text-[var(--color-text-muted)] mt-0.5">佔用 U</p>
+              </div>
             </div>
           </div>
           <div>
