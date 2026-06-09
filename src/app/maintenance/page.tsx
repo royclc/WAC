@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
 import YearMonthPicker from '@/components/YearMonthPicker'
-import { ChevronLeft, ChevronRight, Plus, Wrench, Trash2, CheckCircle, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Wrench, Trash2, CheckCircle, Loader2, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import {
   getCalendarDays,
   formatMonthTitle,
@@ -94,6 +95,22 @@ export default function MaintenancePage() {
   // Helper: get category info
   function getCat(key: string) {
     return categories.find((c) => c.key === key)
+  }
+
+  function exportMaintenanceExcel() {
+    const rows = events.map((e) => ({
+      '日期': e.event_date,
+      '類別': getCat(e.category_key)?.label || e.category_key,
+      '保養項目': e.title,
+      '廠商': e.contractor,
+      '說明': e.description,
+      '完成': e.is_completed ? '是' : '否',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{}])
+    if (rows.length > 0) { ws['!cols'] = Object.keys(rows[0]).map((k) => ({ wch: Math.min(Math.max(k.length * 2, ...rows.map((r) => String(r[k as keyof typeof r] || '').length)), 40) })) }
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '保養記錄')
+    XLSX.writeFile(wb, `保養記錄_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   const days = getCalendarDays(currentMonth)
@@ -208,12 +225,14 @@ export default function MaintenancePage() {
         <div className="flex-1">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold">保養記錄</h1>
-            <button
-              onClick={() => openNewEvent(selectedDate || undefined)}
-              className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1"
-            >
-              <Plus className="w-4 h-4" /> 新增保養
-            </button>
+            <div className="flex gap-2">
+              <button onClick={exportMaintenanceExcel} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
+                <Download className="w-4 h-4" /> 匯出
+              </button>
+              <button onClick={() => openNewEvent(selectedDate || undefined)} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
+                <Plus className="w-4 h-4" /> 新增保養
+              </button>
+            </div>
           </div>
 
           {/* Category filter */}
