@@ -63,7 +63,11 @@ export default function CalendarPage() {
   const [editingEvent, setEditingEvent] = useState<LocalWorkEvent | null>(null)
   const [editingLeave, setEditingLeave] = useState<LocalLeave | null>(null)
 
+  const [maintCategories, setMaintCategories] = useState<{ key: string; label: string }[]>([])
+
   // Event form state
+  const [formIsMaint, setFormIsMaint] = useState(false)
+  const [formMaintCat, setFormMaintCat] = useState('')
   const [formVendor, setFormVendor] = useState('')
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
@@ -128,13 +132,18 @@ export default function CalendarPage() {
     setVendorNames([...nameSet].sort())
   }, [])
 
+  const fetchMaintCategories = useCallback(async () => {
+    const { data } = await supabase.from('maintenance_categories').select('key, label').order('sort_order')
+    if (data) setMaintCategories(data)
+  }, [])
+
   useEffect(() => {
     async function init() {
-      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers(), fetchVendorNames()])
+      await Promise.all([fetchEvents(), fetchLeaves(), fetchUsers(), fetchVendorNames(), fetchMaintCategories()])
       setLoading(false)
     }
     init()
-  }, [fetchEvents, fetchLeaves, fetchUsers, fetchVendorNames])
+  }, [fetchEvents, fetchLeaves, fetchUsers, fetchVendorNames, fetchMaintCategories])
 
   const calendarEvents = [
     ...events.map((e) => ({
@@ -155,6 +164,8 @@ export default function CalendarPage() {
 
   function openNewEvent(date?: Date) {
     setEditingEvent(null)
+    setFormIsMaint(false)
+    setFormMaintCat(maintCategories[0]?.key || '')
     setFormVendor('')
     setFormTitle('')
     setFormDesc('')
@@ -201,6 +212,17 @@ export default function CalendarPage() {
       await supabase.from('work_events').update(payload).eq('id', editingEvent.id)
     } else {
       await supabase.from('work_events').insert(payload)
+      // 同步新增保養記錄
+      if (formIsMaint && formMaintCat) {
+        await supabase.from('maintenance_events').insert({
+          category_key: formMaintCat,
+          title: formTitle,
+          description: formDesc,
+          event_date: formDate,
+          contractor: formVendor === '無' ? '' : formVendor,
+          is_completed: false,
+        })
+      }
     }
     await fetchEvents()
     setSaving(false)
@@ -558,6 +580,24 @@ export default function CalendarPage() {
               ))}
             </div>
           </div>
+          {/* 保養工作 - 只在新增時顯示 */}
+          {!editingEvent && (
+            <div className="p-3 bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={formIsMaint} onChange={(e) => setFormIsMaint(e.target.checked)} className="w-4 h-4 rounded" />
+                <span className="text-sm font-medium">同步新增至保養記錄</span>
+              </label>
+              {formIsMaint && (
+                <div className="mt-2">
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">保養類別</label>
+                  <select value={formMaintCat} onChange={(e) => setFormMaintCat(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm">
+                    {maintCategories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             {editingEvent && (
               <button onClick={() => deleteEvent(editingEvent.id)} disabled={saving} className="px-4 py-2 text-sm text-[var(--color-danger)] border border-[var(--color-danger)] rounded-lg hover:bg-[var(--color-danger-dim)] flex items-center gap-1 disabled:opacity-50">
