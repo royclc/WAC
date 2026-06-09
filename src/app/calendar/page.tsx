@@ -83,6 +83,7 @@ export default function CalendarPage() {
   const [leaveUser, setLeaveUser] = useState('')
   const [leaveType, setLeaveType] = useState('annual')
   const [leaveDate, setLeaveDate] = useState('')
+  const [leaveDateEnd, setLeaveDateEnd] = useState('')
   const [leaveHalf, setLeaveHalf] = useState(false)
   const [leavePeriod, setLeavePeriod] = useState('morning')
   const [leaveNote, setLeaveNote] = useState('')
@@ -251,7 +252,9 @@ export default function CalendarPage() {
     setEditingLeave(null)
     setLeaveUser('')
     setLeaveType('annual')
-    setLeaveDate(date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
+    const d = date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+    setLeaveDate(d)
+    setLeaveDateEnd(d)
     setLeaveHalf(false)
     setLeavePeriod('morning')
     setLeaveNote('')
@@ -265,27 +268,49 @@ export default function CalendarPage() {
     setLeaveUser(lv.user_name)
     setLeaveType(lv.leave_type)
     setLeaveDate(lv.leave_date)
+    setLeaveDateEnd(lv.leave_date)
     setLeaveHalf(lv.is_half_day)
     setLeavePeriod(lv.half_day_period || 'morning')
     setLeaveNote(lv.note || '')
     setShowLeaveModal(true)
   }
 
+  // Generate date strings between start and end (inclusive)
+  function getDateRange(start: string, end: string): string[] {
+    const dates: string[] = []
+    const d = new Date(start)
+    const e = new Date(end)
+    while (d <= e) {
+      dates.push(d.toISOString().split('T')[0])
+      d.setDate(d.getDate() + 1)
+    }
+    return dates
+  }
+
   async function saveLeave() {
     if (!leaveUser || !leaveDate) return
     setSaving(true)
-    const payload = {
-      user_name: leaveUser,
-      leave_type: leaveType,
-      leave_date: leaveDate,
-      is_half_day: leaveHalf,
-      half_day_period: leavePeriod,
-      note: leaveNote,
-    }
     if (editingLeave) {
-      await supabase.from('leave_records').update(payload).eq('id', editingLeave.id)
+      await supabase.from('leave_records').update({
+        user_name: leaveUser,
+        leave_type: leaveType,
+        leave_date: leaveDate,
+        is_half_day: leaveHalf,
+        half_day_period: leavePeriod,
+        note: leaveNote,
+      }).eq('id', editingLeave.id)
     } else {
-      await supabase.from('leave_records').insert(payload)
+      const endDate = leaveDateEnd && leaveDateEnd >= leaveDate ? leaveDateEnd : leaveDate
+      const dates = getDateRange(leaveDate, endDate)
+      const rows = dates.map((d) => ({
+        user_name: leaveUser,
+        leave_type: leaveType,
+        leave_date: d,
+        is_half_day: leaveHalf,
+        half_day_period: leavePeriod,
+        note: leaveNote,
+      }))
+      await supabase.from('leave_records').insert(rows)
     }
     await fetchLeaves()
     setSaving(false)
@@ -638,10 +663,26 @@ export default function CalendarPage() {
               {Object.entries(LEAVE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">日期 *</label>
-            <input type="date" value={leaveDate} onChange={(e) => setLeaveDate(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
-          </div>
+          {editingLeave ? (
+            <div>
+              <label className="block text-sm font-medium mb-1">日期 *</label>
+              <input type="date" value={leaveDate} onChange={(e) => setLeaveDate(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium mb-1">日期區間 *</label>
+              <div className="flex items-center gap-2">
+                <input type="date" value={leaveDate} onChange={(e) => { setLeaveDate(e.target.value); if (!leaveDateEnd || e.target.value > leaveDateEnd) setLeaveDateEnd(e.target.value) }} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+                <span className="text-sm text-[var(--color-text-muted)]">至</span>
+                <input type="date" value={leaveDateEnd} min={leaveDate} onChange={(e) => setLeaveDateEnd(e.target.value)} className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+              </div>
+              {leaveDate && leaveDateEnd && leaveDateEnd >= leaveDate && (
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  共 {getDateRange(leaveDate, leaveDateEnd).length} 天
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={leaveHalf} onChange={(e) => setLeaveHalf(e.target.checked)} className="rounded" />
