@@ -4,7 +4,26 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Upload, Pencil, Trash2, Search, HardDrive, Server, Database, ChevronDown, ChevronRight, Settings, Tag, Loader2 } from 'lucide-react'
+import { Plus, Upload, Pencil, Trash2, Search, HardDrive, Server, Database, ChevronDown, ChevronRight, Settings, Tag, Loader2, Wifi, Shield, Zap, Monitor, Cable, Router, Cpu, MemoryStick, Box, type LucideIcon } from 'lucide-react'
+
+const ICON_OPTIONS: { key: string; icon: LucideIcon; label: string }[] = [
+  { key: 'server', icon: Server, label: '伺服器' },
+  { key: 'hard-drive', icon: HardDrive, label: '硬碟' },
+  { key: 'database', icon: Database, label: '資料庫' },
+  { key: 'monitor', icon: Monitor, label: '螢幕' },
+  { key: 'wifi', icon: Wifi, label: '無線' },
+  { key: 'router', icon: Router, label: '路由器' },
+  { key: 'cable', icon: Cable, label: '線路' },
+  { key: 'shield', icon: Shield, label: '安全' },
+  { key: 'zap', icon: Zap, label: '電源' },
+  { key: 'cpu', icon: Cpu, label: 'CPU' },
+  { key: 'memory-stick', icon: MemoryStick, label: '記憶體' },
+  { key: 'box', icon: Box, label: '設備' },
+]
+
+function getIconComponent(iconKey: string): LucideIcon {
+  return ICON_OPTIONS.find((o) => o.key === iconKey)?.icon || HardDrive
+}
 
 // ── Category / Model 管理 ──
 
@@ -12,6 +31,7 @@ interface CategoryDef {
   id: string
   key: string
   label: string
+  icon: string
   models: ModelDef[]
 }
 
@@ -76,6 +96,7 @@ export default function ServersPage() {
   const [editingCat, setEditingCat] = useState<CategoryDef | null>(null)
   const [catFormLabel, setCatFormLabel] = useState('')
   const [catFormKey, setCatFormKey] = useState('')
+  const [catFormIcon, setCatFormIcon] = useState('server')
 
   const [showModelModal, setShowModelModal] = useState(false)
   const [editingModel, setEditingModel] = useState<{ catId: string; model: ModelDef } | null>(null)
@@ -87,7 +108,7 @@ export default function ServersPage() {
   const fetchCategories = useCallback(async () => {
     const { data: cats } = await supabase
       .from('hardware_categories')
-      .select('id, key, label, sort_order')
+      .select('id, key, label, icon, sort_order')
       .order('sort_order')
 
     if (!cats) return []
@@ -100,6 +121,7 @@ export default function ServersPage() {
       id: c.id,
       key: c.key,
       label: c.label,
+      icon: c.icon || 'hard-drive',
       models: (models || []).filter((m) => m.category_id === c.id).map((m) => ({ id: m.id, name: m.name })),
     }))
 
@@ -230,6 +252,7 @@ export default function ServersPage() {
     setEditingCat(null)
     setCatFormLabel('')
     setCatFormKey('')
+    setCatFormIcon('server')
     setShowCatModal(true)
   }
 
@@ -237,6 +260,7 @@ export default function ServersPage() {
     setEditingCat(cat)
     setCatFormLabel(cat.label)
     setCatFormKey(cat.key)
+    setCatFormIcon(cat.icon || 'hard-drive')
     setShowCatModal(true)
   }
 
@@ -244,14 +268,14 @@ export default function ServersPage() {
     if (!catFormLabel.trim() || !catFormKey.trim()) return
     setSaving(true)
     if (editingCat) {
-      await supabase.from('hardware_categories').update({ key: catFormKey.trim(), label: catFormLabel.trim() }).eq('id', editingCat.id)
+      await supabase.from('hardware_categories').update({ key: catFormKey.trim(), label: catFormLabel.trim(), icon: catFormIcon }).eq('id', editingCat.id)
       // Update assets that had old category key
       if (editingCat.key !== catFormKey.trim()) {
         await supabase.from('hardware_assets').update({ category_key: catFormKey.trim() }).eq('category_key', editingCat.key)
       }
     } else {
       const maxSort = categories.length > 0 ? Math.max(...categories.map((c, i) => i)) + 1 : 0
-      await supabase.from('hardware_categories').insert({ key: catFormKey.trim(), label: catFormLabel.trim(), sort_order: maxSort })
+      await supabase.from('hardware_categories').insert({ key: catFormKey.trim(), label: catFormLabel.trim(), icon: catFormIcon, sort_order: maxSort })
     }
     await fetchCategories()
     await fetchAssets()
@@ -314,7 +338,9 @@ export default function ServersPage() {
   }
 
   const CategoryIcon = ({ catKey }: { catKey: string }) => {
-    return catKey === 'x86_server' ? <Server className="w-4 h-4" /> : catKey === 'storage' ? <Database className="w-4 h-4" /> : <HardDrive className="w-4 h-4" />
+    const cat = categories.find((c) => c.key === catKey)
+    const Icon = getIconComponent(cat?.icon || 'hard-drive')
+    return <Icon className="w-4 h-4" />
   }
 
   if (loading) {
@@ -636,6 +662,25 @@ export default function ServersPage() {
             <input value={catFormKey} onChange={(e) => setCatFormKey(e.target.value)}
               className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg font-mono" placeholder="例：x86_server" />
             <p className="text-xs text-[var(--color-text-muted)] mt-1">系統內部識別用，建議使用英文及底線</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">圖示</label>
+            <div className="flex flex-wrap gap-2">
+              {ICON_OPTIONS.map((opt) => {
+                const Icon = opt.icon
+                return (
+                  <button key={opt.key} type="button" onClick={() => setCatFormIcon(opt.key)}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all w-16 ${
+                      catFormIcon === opt.key
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary-dim)] text-[var(--color-primary)]'
+                        : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)]'
+                    }`} title={opt.label}>
+                    <Icon className="w-5 h-5" />
+                    <span className="text-[10px]">{opt.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <button onClick={() => setShowCatModal(false)} className="px-4 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">取消</button>
