@@ -34,6 +34,7 @@ interface HardwareAsset {
   model: string
   vendor: string
   ip_address: string
+  remote_ip: string
   location: string
   description: string
   is_active: boolean
@@ -64,6 +65,7 @@ export default function ServersPage() {
   const [formModel, setFormModel] = useState('')
   const [formVendor, setFormVendor] = useState('')
   const [formIp, setFormIp] = useState('')
+  const [formRemoteIp, setFormRemoteIp] = useState('')
   const [formLocation, setFormLocation] = useState('')
   const [formUStart, setFormUStart] = useState(0)
   const [formUSize, setFormUSize] = useState(1)
@@ -112,10 +114,10 @@ export default function ServersPage() {
   const fetchAssets = useCallback(async () => {
     const { data } = await supabase
       .from('hardware_assets')
-      .select('id, name, category_key, model, vendor, ip_address, location, description, is_active, rack_u_start, rack_u_size')
+      .select('id, name, category_key, model, vendor, ip_address, remote_ip, location, description, is_active, rack_u_start, rack_u_size')
 
     if (data) {
-      setAssets(data.map((a) => ({ ...a, category: a.category_key, rack_u_start: a.rack_u_start || 0, rack_u_size: a.rack_u_size || 1 })))
+      setAssets(data.map((a) => ({ ...a, category: a.category_key, remote_ip: a.remote_ip || '', rack_u_start: a.rack_u_start || 0, rack_u_size: a.rack_u_size || 1 })))
     }
   }, [])
 
@@ -171,13 +173,13 @@ export default function ServersPage() {
   function openNew() {
     setEditingAsset(null)
     const firstCat = categories[0]
-    setFormName(''); setFormCategory(firstCat?.key || ''); setFormModel(firstCat?.models[0]?.name || ''); setFormVendor(vendorOptions[0] || ''); setFormIp(''); setFormLocation(''); setFormUStart(0); setFormUSize(1); setFormDesc('')
+    setFormName(''); setFormCategory(firstCat?.key || ''); setFormModel(firstCat?.models[0]?.name || ''); setFormVendor(vendorOptions[0] || ''); setFormIp(''); setFormRemoteIp(''); setFormLocation(''); setFormUStart(0); setFormUSize(1); setFormDesc('')
     setShowModal(true)
   }
 
   function openEdit(asset: HardwareAsset) {
     setEditingAsset(asset)
-    setFormName(asset.name); setFormCategory(asset.category); setFormModel(asset.model); setFormVendor(asset.vendor); setFormIp(asset.ip_address); setFormLocation(asset.location); setFormUStart(asset.rack_u_start || 0); setFormUSize(asset.rack_u_size || 1); setFormDesc(asset.description)
+    setFormName(asset.name); setFormCategory(asset.category); setFormModel(asset.model); setFormVendor(asset.vendor); setFormIp(asset.ip_address); setFormRemoteIp(asset.remote_ip || ''); setFormLocation(asset.location); setFormUStart(asset.rack_u_start || 0); setFormUSize(asset.rack_u_size || 1); setFormDesc(asset.description)
     setShowModal(true)
   }
 
@@ -186,7 +188,7 @@ export default function ServersPage() {
     setSaving(true)
     const payload = {
       name: formName, category_key: formCategory, model: formModel, vendor: formVendor,
-      ip_address: formIp, location: formLocation, rack_u_start: formUStart, rack_u_size: formUSize,
+      ip_address: formIp, remote_ip: formRemoteIp, location: formLocation, rack_u_start: formUStart, rack_u_size: formUSize,
       description: formDesc, is_active: true,
     }
     if (editingAsset) {
@@ -395,6 +397,7 @@ export default function ServersPage() {
                   <th className="text-left px-4 py-3 font-medium">型號</th>
                   <th className="text-left px-4 py-3 font-medium">廠商</th>
                   <th className="text-left px-4 py-3 font-medium">IP 位址</th>
+                  <th className="text-left px-4 py-3 font-medium">遠端管理IP</th>
                   <th className="text-left px-4 py-3 font-medium">位置</th>
                   <th className="text-left px-4 py-3 font-medium">說明</th>
                   <th className="text-right px-4 py-3 font-medium">操作</th>
@@ -408,7 +411,7 @@ export default function ServersPage() {
                   return (
                     <React.Fragment key={catKey}>
                       <tr>
-                        <td colSpan={7} className="p-0">
+                        <td colSpan={8} className="p-0">
                           <button onClick={() => toggleGroup(catKey)}
                             className={`flex items-center gap-2 w-full px-4 py-2.5 text-sm font-medium transition-colors ${catIdx % 2 === 0 ? 'bg-[var(--color-primary-dim)] hover:bg-[var(--color-badge-blue)] text-[var(--color-badge-blue-text)]' : 'bg-purple-900/30 hover:bg-purple-900/50 text-purple-300'}`}>
                             {expandedGroups.has(catKey) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -428,6 +431,7 @@ export default function ServersPage() {
                             <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]">{asset.vendor}</span>
                           </td>
                           <td className="px-4 py-3 font-mono text-xs">{asset.ip_address}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{asset.remote_ip || '—'}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             {asset.location || '—'}
                             {asset.location && asset.rack_u_start > 0 && (
@@ -558,9 +562,15 @@ export default function ServersPage() {
             <label className="block text-sm font-medium mb-1">名稱 *</label>
             <input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">IP 位址</label>
-            <input value={formIp} onChange={(e) => setFormIp(e.target.value)} placeholder="192.168.1.1" className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">IP 位址</label>
+              <input value={formIp} onChange={(e) => setFormIp(e.target.value)} placeholder="192.168.1.1" className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">遠端管理IP</label>
+              <input value={formRemoteIp} onChange={(e) => setFormRemoteIp(e.target.value)} placeholder="iLO / iDRAC IP" className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">機櫃位置</label>

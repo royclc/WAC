@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS api.hardware_assets (
   model TEXT DEFAULT '',
   vendor TEXT DEFAULT '',
   ip_address TEXT DEFAULT '',
+  remote_ip TEXT DEFAULT '',
   location TEXT DEFAULT '',
   description TEXT DEFAULT '',
   is_active BOOLEAN DEFAULT true,
