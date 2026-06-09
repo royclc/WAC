@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 import AppShell from '@/components/AppShell'
 import CalendarGrid from '@/components/CalendarGrid'
 import Modal from '@/components/Modal'
-import { Plus, Clock, User, FileText, Trash2, Loader2, Pencil } from 'lucide-react'
+import { Plus, Clock, User, FileText, Trash2, Loader2, Pencil, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { format, formatMonthTitle, isSameDay } from '@/lib/calendar-utils'
 import type { WorkEvent, LeaveRecord } from '@/types/database'
 
@@ -326,6 +327,28 @@ export default function CalendarPage() {
     setSelectedDate(null)
   }
 
+  function exportCalendarExcel() {
+    const wb = XLSX.utils.book_new()
+    // 工作事件
+    const eventRows = events.map((e) => ({
+      '日期': e.event_date, '工作名稱': e.title, '說明': e.description,
+      '開始': e.start_time, '結束': e.end_time, '全天': e.is_all_day ? '是' : '',
+      '廠商': e.vendor, '人員': e.assignees.join(', '),
+    }))
+    const ws1 = XLSX.utils.json_to_sheet(eventRows.length > 0 ? eventRows : [{}])
+    if (eventRows.length > 0) { ws1['!cols'] = Object.keys(eventRows[0]).map((k) => ({ wch: Math.min(Math.max(k.length * 2, ...eventRows.map((r) => String(r[k as keyof typeof r] || '').length)), 40) })) }
+    XLSX.utils.book_append_sheet(wb, ws1, '工作事件')
+    // 請假記錄
+    const leaveRows = leaves.map((l) => ({
+      '日期': l.leave_date, '人員': l.user_name, '假別': LEAVE_TYPES[l.leave_type] || l.leave_type,
+      '半天': l.is_half_day ? (l.half_day_period === 'morning' ? '上午' : '下午') : '', '備註': l.note,
+    }))
+    const ws2 = XLSX.utils.json_to_sheet(leaveRows.length > 0 ? leaveRows : [{}])
+    if (leaveRows.length > 0) { ws2['!cols'] = Object.keys(leaveRows[0]).map((k) => ({ wch: Math.min(Math.max(k.length * 2, ...leaveRows.map((r) => String(r[k as keyof typeof r] || '').length)), 40) })) }
+    XLSX.utils.book_append_sheet(wb, ws2, '請假記錄')
+    XLSX.writeFile(wb, `工作月曆_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
   function toggleAssignee(name: string) {
     setFormAssignees((prev) =>
       prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
@@ -359,19 +382,14 @@ export default function CalendarPage() {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold">工作月曆</h1>
             <div className="flex gap-2">
-              <button
-                onClick={() => openNewLeave(selectedDate || undefined)}
-                className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1"
-              >
-                <FileText className="w-4 h-4" />
-                請假
+              <button onClick={exportCalendarExcel} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
+                <Download className="w-4 h-4" /> 匯出
               </button>
-              <button
-                onClick={() => openNewEvent(selectedDate || undefined)}
-                className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                新增工作
+              <button onClick={() => openNewLeave(selectedDate || undefined)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
+                <FileText className="w-4 h-4" /> 請假
+              </button>
+              <button onClick={() => openNewEvent(selectedDate || undefined)} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
+                <Plus className="w-4 h-4" /> 新增工作
               </button>
             </div>
           </div>

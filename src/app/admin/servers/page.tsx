@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Upload, Pencil, Trash2, Search, HardDrive, Server, Database, ChevronDown, ChevronRight, Settings, Tag, Loader2, Wifi, Shield, Zap, Monitor, Cable, Router, Cpu, MemoryStick, Box, type LucideIcon } from 'lucide-react'
+import { Plus, Upload, Download, Pencil, Trash2, Search, HardDrive, Server, Database, ChevronDown, ChevronRight, Settings, Tag, Loader2, Wifi, Shield, Zap, Monitor, Cable, Router, Cpu, MemoryStick, Box, type LucideIcon } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const ICON_OPTIONS: { key: string; icon: LucideIcon; label: string }[] = [
   { key: 'server', icon: Server, label: '伺服器' },
@@ -337,6 +338,24 @@ export default function ServersPage() {
     await fetchCategories()
   }
 
+  function exportHardwareExcel() {
+    const wb = XLSX.utils.book_new()
+    categories.forEach((cat) => {
+      const catAssets = assets.filter((a) => a.category === cat.key)
+      const rows = catAssets.map((a) => ({
+        '名稱': a.name, '型號': a.model, '廠商': a.vendor,
+        'IP 位址': a.ip_address, '遠端管理IP': a.remote_ip || '',
+        '位置': a.location ? `${a.location}${a.rack_u_start > 0 ? ` U${a.rack_u_start}${a.rack_u_size > 1 ? `-${a.rack_u_start + a.rack_u_size - 1}` : ''}` : ''}` : '',
+        '說明': a.description,
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{}])
+      if (rows.length > 0) { ws['!cols'] = Object.keys(rows[0]).map((k) => ({ wch: Math.min(Math.max(k.length * 2, ...rows.map((r) => String(r[k as keyof typeof r] || '').length)), 40) })) }
+      const name = `${cat.label}`.slice(0, 31)
+      XLSX.utils.book_append_sheet(wb, ws, name)
+    })
+    XLSX.writeFile(wb, `硬體管理_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
   const CategoryIcon = ({ catKey }: { catKey: string }) => {
     const cat = categories.find((c) => c.key === catKey)
     const Icon = getIconComponent(cat?.icon || 'hard-drive')
@@ -361,6 +380,9 @@ export default function ServersPage() {
         <div className="flex gap-2">
           {pageTab === 'assets' && (
             <>
+              <button onClick={exportHardwareExcel} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
+                <Download className="w-4 h-4" /> 匯出
+              </button>
               <button onClick={() => setShowImportModal(true)} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
                 <Upload className="w-4 h-4" /> 匯入
               </button>
