@@ -30,7 +30,15 @@ interface VmOption {
   network_zone: string
 }
 
-const CATEGORIES = ['GCB', 'WSUS', 'Firewall', 'VM', 'Redhat', '其他系統設定'] as const
+interface HwOption {
+  id: string
+  name: string
+  category_key: string
+  ip_address: string
+  location: string
+}
+
+const CATEGORIES = ['GCB', 'WSUS', 'Firewall', 'VM', 'Redhat', '實體機', '其他系統設定'] as const
 type Category = typeof CATEGORIES[number]
 
 const GCB_PLATFORMS = ['Windows', 'RedHat', '其他']
@@ -57,8 +65,11 @@ export default function ServiceChangesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [vmOptions, setVmOptions] = useState<VmOption[]>([])
+  const [hwOptions, setHwOptions] = useState<HwOption[]>([])
   const [hostSearch, setHostSearch] = useState('')
   const [hostZoneFilter, setHostZoneFilter] = useState('全部')
+  const [hwSearch, setHwSearch] = useState('')
+  const [hwCatFilter, setHwCatFilter] = useState('全部')
 
   // Form state
   const [formDate, setFormDate] = useState(today())
@@ -91,8 +102,14 @@ export default function ServiceChangesPage() {
     if (data) setVmOptions(data as VmOption[])
   }, [])
 
+  const fetchHwAssets = useCallback(async () => {
+    const { data } = await supabase.from('hardware_assets').select('id, name, category_key, ip_address, location').eq('is_active', true).order('name')
+    if (data) setHwOptions(data as HwOption[])
+  }, [])
+
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchVms() }, [fetchVms])
+  useEffect(() => { fetchHwAssets() }, [fetchHwAssets])
 
   function resetForm() {
     setFormDate(today())
@@ -111,6 +128,8 @@ export default function ServiceChangesPage() {
     setFormNote('')
     setHostSearch('')
     setHostZoneFilter('全部')
+    setHwSearch('')
+    setHwCatFilter('全部')
   }
 
   function getDefaultPlatform(cat: Category) {
@@ -276,6 +295,10 @@ export default function ServiceChangesPage() {
         rows = catRecords.map((r: ServiceChange) => ({
           '日期': r.change_date, '類別': r.change_type, '修改說明': r.description, '備註': r.note,
         }))
+      } else if (cat === '實體機') {
+        rows = catRecords.map((r: ServiceChange) => ({
+          '日期': r.change_date, '設備': r.host_names?.replace(/\|\|\|/g, ', '), '修改說明': r.description, '備註': r.note,
+        }))
       } else {
         // 其他系統設定
         rows = catRecords.map((r: ServiceChange) => ({
@@ -320,6 +343,7 @@ export default function ServiceChangesPage() {
       case 'Firewall': return ['日期', '駐點單號', '類型', '開通目的', '送檢核']
       case 'VM': return ['日期', '平台', '版本', '類別', '備註']
       case 'Redhat': return ['日期', '類別', '修改說明', '備註']
+      case '實體機': return ['日期', '設備', '修改說明', '備註']
       case '其他系統設定': return ['日期', '主機', '修改說明', '備註']
     }
   }
@@ -331,6 +355,7 @@ export default function ServiceChangesPage() {
       case 'Firewall': return [r.change_date, r.ticket_no, r.change_type, r.purpose, r.is_reviewed ? '✓' : '']
       case 'VM': return [r.change_date, r.platform, r.version, r.change_type, r.note]
       case 'Redhat': return [r.change_date, r.change_type, r.description, r.note]
+      case '實體機': return [r.change_date, r.host_names?.replace(/\|\|\|/g, ', '), r.description, r.note]
       case '其他系統設定': return [r.change_date, r.host_names?.replace(/\|\|\|/g, ', '), r.description, r.note]
     }
   }
@@ -341,6 +366,15 @@ export default function ServiceChangesPage() {
       prev.includes(label) ? prev.filter((h) => h !== label) : [...prev, label]
     )
   }
+
+  const hwCategories = [...new Set(hwOptions.map((h) => h.category_key))].sort()
+
+  const filteredHw = hwOptions.filter((h) => {
+    const q = hwSearch.toLowerCase()
+    const matchSearch = h.name.toLowerCase().includes(q) || h.ip_address.toLowerCase().includes(q)
+    const matchCat = hwCatFilter === '全部' || h.category_key === hwCatFilter
+    return matchSearch && matchCat
+  })
 
   const filteredVms = vmOptions.filter((v) => {
     const q = hostSearch.toLowerCase()
@@ -535,6 +569,62 @@ export default function ServiceChangesPage() {
           </>
         )}
 
+        {/* 實體機 */}
+        {activeTab === '實體機' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1">設備（多選）</label>
+              <div className="flex gap-1.5 mb-2 flex-wrap">
+                {['全部', ...hwCategories].map((c) => (
+                  <button key={c} type="button" onClick={() => setHwCatFilter(c)}
+                    className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                      hwCatFilter === c
+                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                        : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]'
+                    }`}>{c}</button>
+                ))}
+              </div>
+              <div className="relative">
+                <input value={hwSearch} onChange={(e) => setHwSearch(e.target.value)}
+                  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm" placeholder="搜尋設備名稱或 IP..." />
+              </div>
+              <div className="mt-1 max-h-44 overflow-y-auto border border-[var(--color-border)] rounded-lg">
+                {filteredHw.map((h) => {
+                  const label = `${h.name}${h.ip_address ? ` (${h.ip_address})` : ''}`
+                  const selected = formHostNames.includes(label)
+                  return (
+                    <div key={h.id} onClick={() => toggleHost(label)}
+                      className={`px-3 py-1.5 text-sm cursor-pointer flex items-center gap-2 hover:bg-[var(--color-hover)] ${selected ? 'bg-[var(--color-primary-dim)]' : ''}`}>
+                      <span className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-xs ${selected ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white' : 'border-[var(--color-border)]'}`}>
+                        {selected && '✓'}
+                      </span>
+                      <span className="font-mono">{h.name}</span>
+                      {h.ip_address && <span className="text-[var(--color-text-muted)]">{h.ip_address}</span>}
+                      <span className="ml-auto text-[10px] text-[var(--color-text-dim)]">{h.category_key}</span>
+                      {h.location && <span className="text-[10px] text-[var(--color-text-dim)]">{h.location}</span>}
+                    </div>
+                  )
+                })}
+                {filteredHw.length === 0 && <div className="px-3 py-2 text-sm text-[var(--color-text-muted)]">無符合設備</div>}
+              </div>
+              {formHostNames.length > 0 && (
+                <div className="mt-2 p-2.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg">
+                  <div className="text-xs text-[var(--color-text-muted)] mb-1.5">已選擇 {formHostNames.length} 台設備</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {formHostNames.map((h) => (
+                      <span key={h} className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-primary-dim)] text-[var(--color-primary)] text-xs rounded-full">
+                        {h}
+                        <button type="button" onClick={() => toggleHost(h)} className="hover:text-red-400">✕</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {renderDescriptionField()}
+          </>
+        )}
+
         {/* 其他系統設定 */}
         {activeTab === '其他系統設定' && (
           <>
@@ -626,6 +716,7 @@ export default function ServiceChangesPage() {
     'Firewall': 'text-orange-400',
     'VM': 'text-purple-400',
     'Redhat': 'text-red-400',
+    '實體機': 'text-amber-400',
     '其他系統設定': 'text-cyan-400',
   }
 
