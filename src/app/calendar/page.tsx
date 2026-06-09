@@ -20,6 +20,7 @@ interface LocalWorkEvent {
   color: string
   assignees: string[]
   vendor: string
+  maintenance_event_id: string | null
 }
 
 interface LocalLeave {
@@ -99,6 +100,7 @@ export default function CalendarPage() {
           ? (row.assignees as string).split(',').map((s: string) => s.trim())
           : Array.isArray(row.assignees) ? row.assignees : [],
         vendor: (row.vendor as string) || '',
+        maintenance_event_id: (row.maintenance_event_id as string) || null,
       })) as LocalWorkEvent[])
     }
   }, [])
@@ -211,18 +213,20 @@ export default function CalendarPage() {
     if (editingEvent) {
       await supabase.from('work_events').update(payload).eq('id', editingEvent.id)
     } else {
-      await supabase.from('work_events').insert(payload)
+      let maintEventId: string | null = null
       // 同步新增保養記錄
       if (formIsMaint && formMaintCat) {
-        await supabase.from('maintenance_events').insert({
+        const { data: maintData } = await supabase.from('maintenance_events').insert({
           category_key: formMaintCat,
           title: formTitle,
           description: formDesc,
           event_date: formDate,
           contractor: formVendor === '無' ? '' : formVendor,
           is_completed: false,
-        })
+        }).select('id').single()
+        if (maintData) maintEventId = maintData.id
       }
+      await supabase.from('work_events').insert({ ...payload, maintenance_event_id: maintEventId })
     }
     await fetchEvents()
     setSaving(false)
@@ -231,6 +235,11 @@ export default function CalendarPage() {
 
   async function deleteEvent(id: string) {
     setSaving(true)
+    // 找出關聯的保養記錄並同步刪除
+    const ev = events.find((e) => e.id === id)
+    if (ev?.maintenance_event_id) {
+      await supabase.from('maintenance_events').delete().eq('id', ev.maintenance_event_id)
+    }
     await supabase.from('work_events').delete().eq('id', id)
     await fetchEvents()
     setSaving(false)
