@@ -30,39 +30,18 @@ interface HwAsset {
   rack_u_size: number
 }
 
-// ── Color mapping by category_key ──
-const DEVICE_TYPE_MAP: Record<string, { type: string; color: string }> = {
-  server:    { type: '伺服器', color: '#3B82F6' },
-  switch:    { type: '網路',   color: '#F59E0B' },
-  router:    { type: '網路',   color: '#F59E0B' },
-  firewall:  { type: '網路',   color: '#F59E0B' },
-  network:   { type: '網路',   color: '#F59E0B' },
-  storage:   { type: '儲存',   color: '#10B981' },
-  nas:       { type: '儲存',   color: '#10B981' },
-  san:       { type: '儲存',   color: '#10B981' },
-  ups:       { type: '電源',   color: '#EF4444' },
-  pdu:       { type: '電源',   color: '#EF4444' },
-  power:     { type: '電源',   color: '#EF4444' },
+interface HwCategory {
+  key: string
+  label: string
+  color: string
 }
+
 const EMPTY_COLOR = '#374151'
-const DEFAULT_DEVICE = { type: '其他', color: '#8B5CF6' }
-
-function getDeviceColor(categoryKey: string) {
-  return DEVICE_TYPE_MAP[categoryKey]?.color || DEFAULT_DEVICE.color
-}
-
-const LEGEND = [
-  { label: '伺服器', color: '#3B82F6' },
-  { label: '儲存',   color: '#10B981' },
-  { label: '網路',   color: '#F59E0B' },
-  { label: '電源',   color: '#EF4444' },
-  { label: '其他',   color: '#8B5CF6' },
-  { label: '空位',   color: EMPTY_COLOR },
-]
+const DEFAULT_COLOR = '#8B5CF6'
 
 // ── Rack Thumbnail (floor plan) ──
-function RackThumb({ rack, devices, selected, onClick }: {
-  rack: Rack; devices: HwAsset[]; selected: boolean; onClick: () => void
+function RackThumb({ rack, devices, selected, onClick, colorFn }: {
+  rack: Rack; devices: HwAsset[]; selected: boolean; onClick: () => void; colorFn: (key: string) => string
 }) {
   const totalU = rack.total_u
   const usedU = devices.reduce((s, d) => s + (d.rack_u_size || 1), 0)
@@ -74,7 +53,7 @@ function RackThumb({ rack, devices, selected, onClick }: {
   // Merge adjacent/overlapping devices of same type into visual groups
   const groups: { color: string; startU: number; endU: number; count: number }[] = []
   sorted.forEach((d) => {
-    const color = getDeviceColor(d.category_key)
+    const color = colorFn(d.category_key)
     const startU = d.rack_u_start
     const endU = d.rack_u_start + (d.rack_u_size || 1) - 1
     const last = groups[groups.length - 1]
@@ -143,7 +122,7 @@ function RackThumb({ rack, devices, selected, onClick }: {
 }
 
 // ── Rack Detail Side View (3D) ──
-function RackDetail({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
+function RackDetail({ rack, devices, colorFn, labelFn }: { rack: Rack; devices: HwAsset[]; colorFn: (key: string) => string; labelFn: (key: string) => string }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
 
@@ -181,7 +160,7 @@ function RackDetail({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
   }
 
   const hoveredDev = devices.find((d) => d.id === hoveredId)
-  const devTypeLabel = (key: string) => DEVICE_TYPE_MAP[key]?.type || '其他'
+  const devTypeLabel = labelFn
 
   return (
     <div className="flex flex-col items-center relative">
@@ -251,7 +230,7 @@ function RackDetail({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
           if (d.rack_u_start <= 0) return null
           const y = fY + rackH - (d.rack_u_start + (d.rack_u_size || 1) - 1) * U_H
           const h = (d.rack_u_size || 1) * U_H - 2
-          const c = getDeviceColor(d.category_key)
+          const c = colorFn(d.category_key)
           const gid = `dg-${d.id}`
           const isHover = hoveredId === d.id
           const dd = 6 // device 3D depth
@@ -354,7 +333,7 @@ function RackDetail({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
 }
 
 // ── Device List View ──
-function DeviceList({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
+function DeviceList({ rack, devices, colorFn }: { rack: Rack; devices: HwAsset[]; colorFn: (key: string) => string }) {
   const sorted = [...devices].sort((a, b) => b.rack_u_start - a.rack_u_start)
   return (
     <div className="w-full max-w-md">
@@ -376,7 +355,7 @@ function DeviceList({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
                   {d.rack_u_start > 0 ? `U${d.rack_u_start}${d.rack_u_size > 1 ? `-${d.rack_u_start + d.rack_u_size - 1}` : ''}` : '—'}
                 </td>
                 <td className="px-3 py-2">
-                  <span className="inline-block w-2.5 h-2.5 rounded-sm mr-2" style={{ background: getDeviceColor(d.category_key) }} />
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm mr-2" style={{ background: colorFn(d.category_key) }} />
                   {d.name}
                 </td>
                 <td className="px-3 py-2 text-[var(--color-text-muted)]">{d.category_key}</td>
@@ -402,6 +381,7 @@ function DeviceList({ rack, devices }: { rack: Rack; devices: HwAsset[] }) {
 export default function RackDiagramPage() {
   const [racks, setRacks] = useState<Rack[]>([])
   const [assets, setAssets] = useState<HwAsset[]>([])
+  const [hwCategories, setHwCategories] = useState<HwCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRackId, setSelectedRackId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'rack' | 'list'>('rack')
@@ -420,16 +400,33 @@ export default function RackDiagramPage() {
   const [saving, setSaving] = useState(false)
 
   const fetchData = useCallback(async () => {
-    const [{ data: rData }, { data: aData }] = await Promise.all([
+    const [{ data: rData }, { data: aData }, { data: cData }] = await Promise.all([
       supabase.from('racks').select('*').order('sort_order').order('name'),
       supabase.from('hardware_assets').select('id, name, category_key, model, vendor, ip_address, location, description, is_active, rack_u_start, rack_u_size'),
+      supabase.from('hardware_categories').select('key, label, color').order('sort_order'),
     ])
     if (rData) setRacks(rData)
     if (aData) setAssets(aData)
+    if (cData) setHwCategories(cData.map((c) => ({ key: c.key, label: c.label, color: c.color || DEFAULT_COLOR })))
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Dynamic color/label by category_key
+  const catMap = useMemo(() => {
+    const m = new Map<string, HwCategory>()
+    hwCategories.forEach((c) => m.set(c.key, c))
+    return m
+  }, [hwCategories])
+
+  const getDeviceColor = useCallback((key: string) => catMap.get(key)?.color || DEFAULT_COLOR, [catMap])
+  const getDeviceLabel = useCallback((key: string) => catMap.get(key)?.label || key, [catMap])
+
+  const legend = useMemo(() => [
+    ...hwCategories.map((c) => ({ label: c.label, color: c.color })),
+    { label: '空位', color: EMPTY_COLOR },
+  ], [hwCategories])
 
   // Group assets by location → rack.name
   const assetsByRack = useMemo(() => {
@@ -537,7 +534,7 @@ export default function RackDiagramPage() {
         <div className="flex items-center gap-6">
           <h1 className="text-xl font-bold">機房機櫃圖</h1>
           <div className="flex items-center gap-3">
-            {LEGEND.map((l) => (
+            {legend.map((l) => (
               <div key={l.label} className="flex items-center gap-1">
                 <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: l.color, opacity: l.label === '空位' ? 0.3 : 0.85 }} />
                 <span className="text-[11px] text-[var(--color-text-muted)]">{l.label}</span>
@@ -585,6 +582,7 @@ export default function RackDiagramPage() {
                               devices={assetsByRack.get(rack.name) || []}
                               selected={selectedRackId === rack.id}
                               onClick={() => setSelectedRackId(rack.id)}
+                              colorFn={getDeviceColor}
                             />
                             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                               <button onClick={(e) => { e.stopPropagation(); openEditRack(rack) }} className="p-1 bg-black/50 rounded hover:bg-black/70">
@@ -647,9 +645,9 @@ export default function RackDiagramPage() {
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-5">
               {viewMode === 'rack' ? (
-                <RackDetail rack={selectedRack} devices={selectedDevices} />
+                <RackDetail rack={selectedRack} devices={selectedDevices} colorFn={getDeviceColor} labelFn={getDeviceLabel} />
               ) : (
-                <DeviceList rack={selectedRack} devices={selectedDevices} />
+                <DeviceList rack={selectedRack} devices={selectedDevices} colorFn={getDeviceColor} />
               )}
             </div>
           </div>
