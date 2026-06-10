@@ -28,11 +28,14 @@ function getIconComponent(iconKey: string): LucideIcon {
 
 // ── Category / Model 管理 ──
 
+const CAT_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#F97316','#84CC16','#6366F1']
+
 interface CategoryDef {
   id: string
   key: string
   label: string
   icon: string
+  color: string
   models: ModelDef[]
 }
 
@@ -98,6 +101,7 @@ export default function ServersPage() {
   const [catFormLabel, setCatFormLabel] = useState('')
   const [catFormKey, setCatFormKey] = useState('')
   const [catFormIcon, setCatFormIcon] = useState('server')
+  const [catFormColor, setCatFormColor] = useState('#3B82F6')
 
   const [showModelModal, setShowModelModal] = useState(false)
   const [editingModel, setEditingModel] = useState<{ catId: string; model: ModelDef } | null>(null)
@@ -109,7 +113,7 @@ export default function ServersPage() {
   const fetchCategories = useCallback(async () => {
     const { data: cats } = await supabase
       .from('hardware_categories')
-      .select('id, key, label, icon, sort_order')
+      .select('id, key, label, icon, color, sort_order')
       .order('sort_order')
 
     if (!cats) return []
@@ -123,6 +127,7 @@ export default function ServersPage() {
       key: c.key,
       label: c.label,
       icon: c.icon || 'hard-drive',
+      color: c.color || '#3B82F6',
       models: (models || []).filter((m) => m.category_id === c.id).map((m) => ({ id: m.id, name: m.name })),
     }))
 
@@ -254,6 +259,7 @@ export default function ServersPage() {
     setCatFormLabel('')
     setCatFormKey('')
     setCatFormIcon('server')
+    setCatFormColor('#3B82F6')
     setShowCatModal(true)
   }
 
@@ -262,6 +268,7 @@ export default function ServersPage() {
     setCatFormLabel(cat.label)
     setCatFormKey(cat.key)
     setCatFormIcon(cat.icon || 'hard-drive')
+    setCatFormColor(cat.color || '#3B82F6')
     setShowCatModal(true)
   }
 
@@ -269,14 +276,14 @@ export default function ServersPage() {
     if (!catFormLabel.trim() || !catFormKey.trim()) return
     setSaving(true)
     if (editingCat) {
-      await supabase.from('hardware_categories').update({ key: catFormKey.trim(), label: catFormLabel.trim(), icon: catFormIcon }).eq('id', editingCat.id)
+      await supabase.from('hardware_categories').update({ key: catFormKey.trim(), label: catFormLabel.trim(), icon: catFormIcon, color: catFormColor }).eq('id', editingCat.id)
       // Update assets that had old category key
       if (editingCat.key !== catFormKey.trim()) {
         await supabase.from('hardware_assets').update({ category_key: catFormKey.trim() }).eq('category_key', editingCat.key)
       }
     } else {
       const maxSort = categories.length > 0 ? Math.max(...categories.map((c, i) => i)) + 1 : 0
-      await supabase.from('hardware_categories').insert({ key: catFormKey.trim(), label: catFormLabel.trim(), icon: catFormIcon, sort_order: maxSort })
+      await supabase.from('hardware_categories').insert({ key: catFormKey.trim(), label: catFormLabel.trim(), icon: catFormIcon, color: catFormColor, sort_order: maxSort })
     }
     await fetchCategories()
     await fetchAssets()
@@ -702,6 +709,16 @@ export default function ServersPage() {
                   </button>
                 )
               })}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">顏色（機櫃圖顯示用）</label>
+            <div className="flex gap-2">
+              {CAT_COLORS.map((c) => (
+                <button key={c} type="button" onClick={() => setCatFormColor(c)}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${catFormColor === c ? 'border-white scale-110' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                  style={{ backgroundColor: c }} />
+              ))}
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2">
