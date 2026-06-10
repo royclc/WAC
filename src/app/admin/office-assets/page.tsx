@@ -34,6 +34,7 @@ export default function OfficeAssetsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<OfficeAsset | null>(null)
   const [saving, setSaving] = useState(false)
+  const [userList, setUserList] = useState<string[]>([])
 
   // Form state
   const [formType, setFormType] = useState('主機')
@@ -60,6 +61,12 @@ export default function OfficeAssetsPage() {
   }, [])
 
   useEffect(() => { fetchAssets() }, [fetchAssets])
+
+  useEffect(() => {
+    supabase.from('users').select('name').eq('is_active', true).order('name').then(({ data }) => {
+      if (data) setUserList(data.map((u) => u.name).filter(Boolean))
+    })
+  }, [])
 
   const filtered = assets.filter((a) => {
     if (filterType !== 'all') {
@@ -256,7 +263,10 @@ export default function OfficeAssetsPage() {
           {/* 使用者 */}
           <div>
             <label className="block text-sm font-medium mb-1">使用者 *</label>
-            <input value={formUser} onChange={(e) => setFormUser(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg" />
+            <select value={formUser} onChange={(e) => setFormUser(e.target.value)} className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg">
+              <option value="">請選擇使用者</option>
+              {userList.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
           </div>
 
           {/* 是否為中華資產 */}
