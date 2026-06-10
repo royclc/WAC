@@ -723,18 +723,8 @@ export default function ServiceChangesPage() {
   return (
     <AppShell>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6">
         <h2 className="text-xl font-bold">服務變動記錄</h2>
-        <div className="flex gap-2">
-          <button onClick={exportExcel}
-            className="flex items-center gap-1 px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] transition">
-            <Download className="w-4 h-4" /> 匯出 Excel
-          </button>
-          <button onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm hover:brightness-110 transition">
-            <Plus className="w-4 h-4" /> 新增記錄
-          </button>
-        </div>
       </div>
 
       {/* Tabs */}
@@ -752,12 +742,24 @@ export default function ServiceChangesPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-dim)]" />
-        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-[var(--color-border)] rounded-lg text-sm bg-[var(--color-bg)]"
-          placeholder="搜尋..." />
+      {/* Search + Actions */}
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-dim)]" />
+          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 border border-[var(--color-border)] rounded-lg text-sm bg-[var(--color-bg)]"
+            placeholder="搜尋..." />
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={exportExcel}
+            className="flex items-center gap-1 px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] transition">
+            <Download className="w-4 h-4" /> 匯出 Excel
+          </button>
+          <button onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm hover:brightness-110 transition">
+            <Plus className="w-4 h-4" /> 新增記錄
+          </button>
+        </div>
       </div>
 
       {/* Table */}
