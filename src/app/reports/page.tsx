@@ -347,7 +347,7 @@ function getDeviceGroups(networkAssets: NetworkAsset[]): DeviceGroup[] {
 // ── Org type to majorCategory mapping ──
 
 function orgTypeToMajorCategory(orgType: string): string {
-  if (orgType === '總局') return '總局'
+  if (orgType === 'headquarters' || orgType === '總局') return '總局'
   return '分局稽徵所'
 }
 
@@ -688,96 +688,96 @@ export default function ReportsPage() {
   // ═══ Network: Part 2 - Monthly summary ═══
   const currentPeriodIndex = useMemo(() => monthToPeriodIndex(month), [month])
 
-  const monthlySummary = useMemo(() => {
-    const period = quarterPeriods[currentPeriodIndex]
-    if (!period) return []
-    return deviceGroups.map((group) => {
-      const stats = calcPeriodStats(group.assets, downtimeEvents, period.start, period.end)
-      return { label: group.label, ...stats }
-    })
-  }, [deviceGroups, quarterPeriods, currentPeriodIndex, downtimeEvents])
+  // ═══ Network: Quarter event footnotes (new system) ═══
+  // [註1] = 固定說明文字, [註2+] = 各事件（不同設備類型同事件共用同一個註）
+  interface EnhancedEventNote {
+    noteNum: number
+    startTime: string
+    endTime: string
+    title: string
+    planType: string
+    totalHours: number
+    deviceLabels: string[]
+  }
 
-  // ═══ Network: Quarter event footnotes with device group mapping ═══
-  interface EventNote { date: string; unit: string; title: string; planType: string; groupLabel: string; periodIdx: number }
-  const { quarterEventNotes, notesByGroupPeriod, notesByGroup, notesByGroupPeriodPlanned, notesByGroupPeriodUnplanned } = useMemo(() => {
+  const NOTE1_TEXT = '每季可用率為每月累計,將在每季最後一月進行可用率按季計算。'
+
+  const { networkEventNotes, notesByDeviceLabel } = useMemo(() => {
     const qStart = quarterRange.start
     const qEnd = quarterRange.end
-    const assetMap = new Map<string, NetworkAsset>()
-    networkAssets.forEach((a) => assetMap.set(a.id, a))
 
-    // Build asset_id → group label mapping
     const assetToGroup = new Map<string, string>()
     deviceGroups.forEach((g) => g.assets.forEach((a) => assetToGroup.set(a.id, g.label)))
 
-    const pad = (n: number) => String(n).padStart(2, '0')
+    const pad2 = (n: number) => String(n).padStart(2, '0')
+    const formatDT = (d: Date) => {
+      const roc = d.getFullYear() - 1911
+      return `${roc}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+    }
 
-    // Step 1: Collect unique notes (dedupe by unit + date + title + planType)
-    const notes: EventNote[] = []
-    const seenNote = new Set<string>()
-    // Also track which groups/periods each unique note applies to
-    const noteGroupPeriods: { groupLabels: Set<string>; periodIdxs: Set<number> }[] = []
+    interface RawNote {
+      startDate: Date
+      startTime: string
+      endTime: string
+      title: string
+      planType: string
+      totalHours: number
+      deviceLabels: Set<string>
+    }
+
+    const noteMap = new Map<string, RawNote>()
 
     downtimeEvents.forEach((e) => {
       const eStart = parseLocalDate(e.start_time)
       const eEnd = parseLocalDate(e.end_time)
       if (eEnd <= qStart || eStart >= qEnd) return
-      const asset = assetMap.get(e.asset_id)
-      const groupLabel = assetToGroup.get(e.asset_id) ?? ''
-      const rocDate = `${eStart.getFullYear() - 1911}/${pad(eStart.getMonth() + 1)}/${pad(eStart.getDate())}`
-      const planType = e.plan_type === 'planned' ? '計畫性' : '非計畫性'
-      const unit = asset?.unit ?? ''
-      let periodIdx = -1
-      quarterPeriods.forEach((p, idx) => { if (eStart < p.end && eEnd > p.start) periodIdx = idx })
 
-      const dedupeKey = `${unit}|${rocDate}|${e.title}|${planType}`
-      if (seenNote.has(dedupeKey)) {
-        // Already exists — just add this group/period to existing note
-        const existIdx = notes.findIndex((n) => `${n.unit}|${n.date}|${n.title}|${n.planType}` === dedupeKey)
-        if (existIdx >= 0) {
-          noteGroupPeriods[existIdx].groupLabels.add(groupLabel)
-          noteGroupPeriods[existIdx].periodIdxs.add(periodIdx)
-        }
-        return
+      const groupLabel = assetToGroup.get(e.asset_id) ?? ''
+      if (!groupLabel) return
+
+      const s = eStart < qStart ? qStart : eStart
+      const ed = eEnd > qEnd ? qEnd : eEnd
+      const hours = Math.round(((ed.getTime() - s.getTime()) / 3600000) * 100) / 100
+
+      const dedupeKey = `${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+
+      if (noteMap.has(dedupeKey)) {
+        noteMap.get(dedupeKey)!.deviceLabels.add(groupLabel)
+      } else {
+        noteMap.set(dedupeKey, {
+          startDate: s,
+          startTime: formatDT(s),
+          endTime: formatDT(ed),
+          title: e.title,
+          planType: e.plan_type === 'planned' ? '計畫性' : '非計畫性',
+          totalHours: hours,
+          deviceLabels: new Set([groupLabel]),
+        })
       }
-      seenNote.add(dedupeKey)
-      notes.push({ date: rocDate, unit, title: e.title, planType, groupLabel, periodIdx })
-      noteGroupPeriods.push({ groupLabels: new Set([groupLabel]), periodIdxs: new Set([periodIdx]) })
     })
 
-    notes.sort((a, b) => a.date.localeCompare(b.date))
-    // Re-sort noteGroupPeriods to match
-    const sortedIndices = notes.map((_, i) => i)
-    const origNotes = [...notes]
-    const origGP = [...noteGroupPeriods]
-    sortedIndices.sort((a, b) => origNotes[a].date.localeCompare(origNotes[b].date))
-    const sortedNotes = sortedIndices.map((i) => origNotes[i])
-    const sortedGP = sortedIndices.map((i) => origGP[i])
+    const sorted = Array.from(noteMap.values()).sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
 
-    // Step 2: Build mappings
-    const byGroupPeriod = new Map<string, number[]>()
-    const byGroup = new Map<string, number[]>()
-    const byGroupPeriodPlanned = new Map<string, number[]>()
-    const byGroupPeriodUnplanned = new Map<string, number[]>()
-    const addTo = (map: Map<string, number[]>, key: string, num: number) => {
-      if (!map.has(key)) map.set(key, [])
-      if (!map.get(key)!.includes(num)) map.get(key)!.push(num)
-    }
-    sortedNotes.forEach((note, idx) => {
-      const noteNum = idx + 1
-      const gp = sortedGP[idx]
-      gp.groupLabels.forEach((gl) => {
-        gp.periodIdxs.forEach((pi) => {
-          const gpKey = `${gl}|${pi}`
-          addTo(byGroupPeriod, gpKey, noteNum)
-          if (note.planType === '計畫性') addTo(byGroupPeriodPlanned, gpKey, noteNum)
-          else addTo(byGroupPeriodUnplanned, gpKey, noteNum)
-        })
-        addTo(byGroup, gl, noteNum)
+    const notes: EnhancedEventNote[] = sorted.map((n, idx) => ({
+      noteNum: idx + 2,
+      startTime: n.startTime,
+      endTime: n.endTime,
+      title: n.title,
+      planType: n.planType,
+      totalHours: n.totalHours,
+      deviceLabels: Array.from(n.deviceLabels),
+    }))
+
+    const byDeviceLabel = new Map<string, number[]>()
+    notes.forEach((note) => {
+      note.deviceLabels.forEach((label) => {
+        if (!byDeviceLabel.has(label)) byDeviceLabel.set(label, [])
+        byDeviceLabel.get(label)!.push(note.noteNum)
       })
     })
 
-    return { quarterEventNotes: sortedNotes, notesByGroupPeriod: byGroupPeriod, notesByGroup: byGroup, notesByGroupPeriodPlanned: byGroupPeriodPlanned, notesByGroupPeriodUnplanned: byGroupPeriodUnplanned }
-  }, [downtimeEvents, networkAssets, deviceGroups, quarterRange, quarterPeriods])
+    return { networkEventNotes: notes, notesByDeviceLabel: byDeviceLabel }
+  }, [downtimeEvents, deviceGroups, quarterRange])
 
   // ═══ Circuit summaries for fiber report ═══
 
@@ -875,6 +875,84 @@ export default function ReportsPage() {
     })
   }, [serverAssets, serverEvents, quarterPeriods])
 
+  // ═══ Server: Quarter event footnotes (same note system) ═══
+  const { serverEventNotes, serverNotesByLabel } = useMemo(() => {
+    const qStart = quarterRange.start
+    const qEnd = quarterRange.end
+
+    const assetNameMap = new Map<string, string>()
+    serverAssets.forEach((a) => assetNameMap.set(a.id, a.name))
+
+    const pad2 = (n: number) => String(n).padStart(2, '0')
+    const formatDT = (d: Date) => {
+      const roc = d.getFullYear() - 1911
+      return `${roc}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+    }
+
+    interface RawNote {
+      startDate: Date
+      startTime: string
+      endTime: string
+      title: string
+      planType: string
+      totalHours: number
+      labels: Set<string>
+    }
+
+    const noteMap = new Map<string, RawNote>()
+
+    serverEvents.forEach((e) => {
+      const eStart = parseLocalDate(e.start_time)
+      const eEnd = parseLocalDate(e.end_time)
+      if (eEnd <= qStart || eStart >= qEnd) return
+
+      const assetName = assetNameMap.get(e.asset_id) ?? ''
+      if (!assetName) return
+
+      const s = eStart < qStart ? qStart : eStart
+      const ed = eEnd > qEnd ? qEnd : eEnd
+      const hours = Math.round(((ed.getTime() - s.getTime()) / 3600000) * 100) / 100
+
+      const dedupeKey = `${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+
+      if (noteMap.has(dedupeKey)) {
+        noteMap.get(dedupeKey)!.labels.add(assetName)
+      } else {
+        noteMap.set(dedupeKey, {
+          startDate: s,
+          startTime: formatDT(s),
+          endTime: formatDT(ed),
+          title: e.title,
+          planType: e.plan_type === 'planned' ? '計畫性' : '非計畫性',
+          totalHours: hours,
+          labels: new Set([assetName]),
+        })
+      }
+    })
+
+    const sorted = Array.from(noteMap.values()).sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+
+    const notes: EnhancedEventNote[] = sorted.map((n, idx) => ({
+      noteNum: idx + 2,
+      startTime: n.startTime,
+      endTime: n.endTime,
+      title: n.title,
+      planType: n.planType,
+      totalHours: n.totalHours,
+      deviceLabels: Array.from(n.labels),
+    }))
+
+    const byLabel = new Map<string, number[]>()
+    notes.forEach((note) => {
+      note.deviceLabels.forEach((label) => {
+        if (!byLabel.has(label)) byLabel.set(label, [])
+        byLabel.get(label)!.push(note.noteNum)
+      })
+    })
+
+    return { serverEventNotes: notes, serverNotesByLabel: byLabel }
+  }, [serverEvents, serverAssets, quarterRange])
+
   // ═══ Chart data for network ═══
   const networkChartData: ChartData[] = useMemo(() => {
     return quarterPeriods.map((period) => {
@@ -953,8 +1031,8 @@ export default function ReportsPage() {
     }))
 
     quarterlyReport.forEach((device) => {
-      const groupNotes = notesByGroup.get(device.label)
-      const groupNoteLabel = groupNotes ? (groupNotes.length === 1 ? `【註${groupNotes[0]}】` : `【註${groupNotes[0]}~註${groupNotes[groupNotes.length - 1]}】`) : ''
+      const deviceNotes = notesByDeviceLabel.get(device.label)
+      const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
 
       device.monthRows.forEach((row, i) => {
         const cells = []
@@ -977,61 +1055,21 @@ export default function ReportsPage() {
         docxCell(`${rocYear}年第${quarter}季總計`, { bold: true }),
         docxCell(device.totalCount > 1 ? `${device.quarterly.hoursPerDevice}*${device.totalCount}` : `${device.quarterly.hoursPerDevice}`, { alignment: AlignmentType.RIGHT, bold: true }),
         docxCell(`${device.quarterly.plannedHours}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.unplannedHours}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.availabilityPct}%${groupNoteLabel ? `\n${groupNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.unplannedHours}${deviceNoteLabel ? `\n${deviceNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.availabilityPct}%\n[註1]`, { alignment: AlignmentType.RIGHT, bold: true }),
       ]
       qRows.push(new TableRow({ children: totalCells }))
     })
 
-    // ── 表2: 網路資安設備停止服務彙總列表 ──
-    const mRows: TableRow[] = []
-
-    // 計算期間 header
-    mRows.push(new TableRow({
-      children: [
-        docxCell('計算期間', { bold: true }),
-        new TableCell({
-          borders: createDocxBorders(),
-          columnSpan: 4,
-          children: [new Paragraph({ children: [new TextRun({ text: quarterPeriods[currentPeriodIndex]?.label ?? '', bold: true, size: 20, font: '標楷體' })] })],
-        }),
-      ],
-    }))
-
-    mRows.push(new TableRow({
-      children: [
-        docxCell('類別', { bold: true }),
-        docxCell('本月應服務總時數(hrs)', { bold: true, alignment: AlignmentType.CENTER }),
-        docxCell('計畫性停止服務時間累計(hrs)', { bold: true, alignment: AlignmentType.CENTER }),
-        docxCell('非計畫性停止服務時間累計(hrs)', { bold: true, alignment: AlignmentType.CENTER }),
-        docxCell('可用率', { bold: true, alignment: AlignmentType.CENTER }),
-      ],
-    }))
-
-    const monthNoteSet = new Set<number>()
-    monthlySummary.forEach((row) => {
-      const pNotes = notesByGroupPeriodPlanned.get(`${row.label}|${currentPeriodIndex}`)
-      const uNotes = notesByGroupPeriodUnplanned.get(`${row.label}|${currentPeriodIndex}`)
-      const pLabel = pNotes ? (pNotes.length === 1 ? `【註${pNotes[0]}】` : `【註${pNotes[0]}~註${pNotes[pNotes.length - 1]}】`) : ''
-      const uLabel = uNotes ? (uNotes.length === 1 ? `【註${uNotes[0]}】` : `【註${uNotes[0]}~註${uNotes[uNotes.length - 1]}】`) : ''
-      pNotes?.forEach((n) => monthNoteSet.add(n))
-      uNotes?.forEach((n) => monthNoteSet.add(n))
-      mRows.push(new TableRow({
-        children: [
-          docxCell(row.label, { bold: true }),
-          docxCell(row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : `${row.hoursPerDevice}`, { alignment: AlignmentType.RIGHT }),
-          docxCell(`${row.plannedHours}${pLabel ? `\n${pLabel}` : ''}`, { alignment: AlignmentType.RIGHT }),
-          docxCell(`${row.unplannedHours}${uLabel ? `\n${uLabel}` : ''}`, { alignment: AlignmentType.RIGHT }),
-          docxCell(`${row.availabilityPct}%`, { alignment: AlignmentType.RIGHT }),
-        ],
-      }))
-    })
-
-    const monthNoteSorted = Array.from(monthNoteSet).sort((a, b) => a - b)
-    const mFootnotes = monthNoteSorted.map((num) => {
-      const note = quarterEventNotes[num - 1]
-      return new Paragraph({ children: [new TextRun({ text: `※【註${num}】${note.date} ${note.unit}-${note.title}（${note.planType}）`, size: 18, font: '標楷體' })] })
-    })
+    // Footnotes
+    const allFootnotes = [
+      new Paragraph({ children: [new TextRun({ text: `※【註1】${NOTE1_TEXT}`, size: 18, font: '標楷體' })] }),
+      ...networkEventNotes.map((note) =>
+        new Paragraph({
+          children: [new TextRun({ text: `※【註${note.noteNum}】${note.startTime}~${note.endTime} ${note.title}（${note.planType}）累計停止時間${note.totalHours}小時`, size: 18, font: '標楷體' })],
+        })
+      ),
+    ]
 
     const doc = new Document({
       sections: [{
@@ -1041,17 +1079,9 @@ export default function ReportsPage() {
             children: [new TextRun({ text: `${rocYear}年第${quarter}季 網路統計報表`, bold: true, size: 28, font: '標楷體' })],
           }),
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
-          new Paragraph({ children: [new TextRun({ text: '網路資安設備停止服務彙總列表', bold: true, size: 24, font: '標楷體' })] }),
-          new Table({ rows: mRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
-          ...mFootnotes,
-          new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
           new Paragraph({ children: [new TextRun({ text: '各設備類型季報', bold: true, size: 24, font: '標楷體' })] }),
           new Table({ rows: qRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
-          ...quarterEventNotes.map((note, idx) =>
-            new Paragraph({
-              children: [new TextRun({ text: `※【註${idx + 1}】${note.date} ${note.unit}-${note.title}（${note.planType}）`, size: 18, font: '標楷體' })],
-            })
-          ),
+          ...allFootnotes,
         ],
       }],
     })
@@ -1100,6 +1130,9 @@ export default function ReportsPage() {
     }))
 
     serverQuarterlyReport.forEach((device) => {
+      const deviceNotes = serverNotesByLabel.get(device.label)
+      const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
+
       device.monthRows.forEach((row, i) => {
         const cells = []
         if (i === 0) {
@@ -1121,11 +1154,20 @@ export default function ReportsPage() {
         docxCell(`${rocYear}年第${quarter}季總計`, { bold: true }),
         docxCell(device.totalCount > 1 ? `${device.quarterly.hoursPerDevice}*${device.totalCount}` : `${device.quarterly.hoursPerDevice}`, { alignment: AlignmentType.RIGHT, bold: true }),
         docxCell(`${device.quarterly.plannedHours}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.unplannedHours}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.availabilityPct}%`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.unplannedHours}${deviceNoteLabel ? `\n${deviceNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.availabilityPct}%\n[註1]`, { alignment: AlignmentType.RIGHT, bold: true }),
       ]
       quarterlyRows.push(new TableRow({ children: totalCells }))
     })
+
+    const hwFootnotes = [
+      new Paragraph({ children: [new TextRun({ text: `※【註1】${NOTE1_TEXT}`, size: 18, font: '標楷體' })] }),
+      ...serverEventNotes.map((note) =>
+        new Paragraph({
+          children: [new TextRun({ text: `※【註${note.noteNum}】${note.startTime}~${note.endTime} ${note.title}（${note.planType}）累計停止時間${note.totalHours}小時`, size: 18, font: '標楷體' })],
+        })
+      ),
+    ]
 
     const doc = new Document({
       sections: [{
@@ -1140,6 +1182,7 @@ export default function ReportsPage() {
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
           new Paragraph({ children: [new TextRun({ text: '表2-4-3 各設備類型季報', bold: true, size: 24, font: '標楷體' })] }),
           new Table({ rows: quarterlyRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
+          ...hwFootnotes,
         ],
       }],
     })
@@ -1590,7 +1633,10 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {serverQuarterlyReport.map((device) => (
+                  {serverQuarterlyReport.map((device) => {
+                    const deviceNotes = serverNotesByLabel.get(device.label)
+                    const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
+                    return (
                     <React.Fragment key={device.label}>
                       {device.monthRows.map((row, i) => (
                         <tr key={`${device.label}-${i}`} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
@@ -1631,18 +1677,30 @@ export default function ReportsPage() {
                             : device.quarterly.hoursPerDevice}
                         </td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">{device.quarterly.plannedHours}</td>
-                        <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">{device.quarterly.unplannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">
+                          {device.quarterly.unplannedHours}
+                          {deviceNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{deviceNoteLabel}</span></>}
+                        </td>
                         <td className="text-right px-4 py-2.5">
                           <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : device.quarterly.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                             {device.quarterly.availabilityPct}%
+                            <br/><span className="text-xs font-normal text-[var(--color-text-muted)]">[註1]</span>
                           </span>
                         </td>
                       </tr>
                     </React.Fragment>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* ═══ 硬體季報註腳 ═══ */}
+          <div className="mt-3 px-2 text-xs text-[var(--color-text-muted)] space-y-0.5">
+            <div>※【註1】{NOTE1_TEXT}</div>
+            {serverEventNotes.map((note) => (
+              <div key={note.noteNum}>※【註{note.noteNum}】{note.startTime}~{note.endTime} {note.title}（{note.planType}）累計停止時間{note.totalHours}小時</div>
+            ))}
           </div>
         </>
       )}
@@ -1692,83 +1750,7 @@ export default function ReportsPage() {
               {/* Chart */}
               <DonutChartSection data={networkChartData} title={`${rocYear}年第${quarter}季 網路停機時數統計`} />
 
-              {/* ═══ 表1: 網路資安設備停止服務彙總列表 ═══ */}
-              <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden mb-6">
-                <div className="px-6 py-4 border-b border-[var(--color-border)]">
-                  <h3 className="font-semibold">{rocYear}年第{quarter}季 — 網路資安設備停止服務彙總列表</h3>
-                  <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                    可用率 = (本月應服務總時數 - 非計畫性停止服務時間) / 本月應服務總時數 x 100%
-                  </p>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-warning-dim)]">
-                        <th className="text-left px-4 py-3 font-medium">計算期間</th>
-                        <th className="text-left px-4 py-3 font-medium" colSpan={4}>{quarterPeriods[currentPeriodIndex]?.label}</th>
-                      </tr>
-                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
-                        <th className="text-left px-4 py-3 font-medium min-w-[160px]">類別</th>
-                        <th className="text-right px-4 py-3 font-medium">本月應服務<br/>總時數(hrs)</th>
-                        <th className="text-right px-4 py-3 font-medium">計畫性停止服務<br/>時間累計(hrs)</th>
-                        <th className="text-right px-4 py-3 font-medium">非計畫性停止服務<br/>時間累計(hrs)</th>
-                        <th className="text-right px-4 py-3 font-medium">可用率</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {monthlySummary.map((row) => {
-                        const pNotes = notesByGroupPeriodPlanned.get(`${row.label}|${currentPeriodIndex}`)
-                        const pLabel = pNotes ? (pNotes.length === 1 ? `【註${pNotes[0]}】` : `【註${pNotes[0]}~註${pNotes[pNotes.length - 1]}】`) : ''
-                        const uNotes = notesByGroupPeriodUnplanned.get(`${row.label}|${currentPeriodIndex}`)
-                        const uLabel = uNotes ? (uNotes.length === 1 ? `【註${uNotes[0]}】` : `【註${uNotes[0]}~註${uNotes[uNotes.length - 1]}】`) : ''
-                        return (
-                        <tr key={row.label} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-row-hover)]">
-                          <td className="px-4 py-3 font-medium">{row.label}</td>
-                          <td className="text-right px-4 py-3 font-mono text-xs">
-                            {row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : row.hoursPerDevice}
-                          </td>
-                          <td className="text-right px-4 py-3 text-[var(--color-warning)]">
-                            {row.plannedHours}
-                            {pLabel && <><br/><span className="text-xs text-[var(--color-text-muted)]">{pLabel}</span></>}
-                          </td>
-                          <td className="text-right px-4 py-3 text-[var(--color-danger)]">
-                            {row.unplannedHours}
-                            {uLabel && <><br/><span className="text-xs text-[var(--color-text-muted)]">{uLabel}</span></>}
-                          </td>
-                          <td className="text-right px-4 py-3">
-                            <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
-                              {row.availabilityPct}%
-                            </span>
-                          </td>
-                        </tr>
-                      )})}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* ═══ 彙總列表註腳 ═══ */}
-              {(() => {
-                const monthNoteIndices = new Set<number>()
-                monthlySummary.forEach((row) => {
-                  const pN = notesByGroupPeriodPlanned.get(`${row.label}|${currentPeriodIndex}`)
-                  const uN = notesByGroupPeriodUnplanned.get(`${row.label}|${currentPeriodIndex}`)
-                  pN?.forEach((n) => monthNoteIndices.add(n))
-                  uN?.forEach((n) => monthNoteIndices.add(n))
-                })
-                const sorted = Array.from(monthNoteIndices).sort((a, b) => a - b)
-                if (sorted.length === 0) return null
-                return (
-                  <div className="mb-6 px-2 text-xs text-[var(--color-text-muted)] space-y-0.5">
-                    {sorted.map((num) => {
-                      const note = quarterEventNotes[num - 1]
-                      return <div key={num}>※【註{num}】{note.date} {note.unit}-{note.title}（{note.planType}）</div>
-                    })}
-                  </div>
-                )
-              })()}
-
-              {/* ═══ 表2: 各設備類型季報 ═══ */}
+              {/* ═══ 各設備類型季報 ═══ */}
               <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
                 <div className="px-6 py-4 border-b border-[var(--color-border)]">
                   <h3 className="font-semibold">{rocYear}年第{quarter}季 — 各設備類型季報</h3>
@@ -1794,8 +1776,8 @@ export default function ReportsPage() {
                     </thead>
                     <tbody>
                       {quarterlyReport.map((device) => {
-                        const groupNotes = notesByGroup.get(device.label)
-                        const groupNoteLabel = groupNotes ? (groupNotes.length === 1 ? `【註${groupNotes[0]}】` : `【註${groupNotes[0]}~註${groupNotes[groupNotes.length - 1]}】`) : ''
+                        const deviceNotes = notesByDeviceLabel.get(device.label)
+                        const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
                         return (
                         <React.Fragment key={device.label}>
                           {device.monthRows.map((row, i) => (
@@ -1837,11 +1819,14 @@ export default function ReportsPage() {
                                 : device.quarterly.hoursPerDevice}
                             </td>
                             <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">{device.quarterly.plannedHours}</td>
-                            <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">{device.quarterly.unplannedHours}</td>
+                            <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">
+                              {device.quarterly.unplannedHours}
+                              {deviceNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{deviceNoteLabel}</span></>}
+                            </td>
                             <td className="text-right px-4 py-2.5">
                               <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : device.quarterly.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                                 {device.quarterly.availabilityPct}%
-                                {groupNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{groupNoteLabel}</span></>}
+                                <br/><span className="text-xs font-normal text-[var(--color-text-muted)]">[註1]</span>
                               </span>
                             </td>
                           </tr>
@@ -1852,14 +1837,13 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* ═══ 註腳: 該季事件說明 ═══ */}
-              {quarterEventNotes.length > 0 && (
-                <div className="mt-3 px-2 text-xs text-[var(--color-text-muted)] space-y-0.5">
-                  {quarterEventNotes.map((note, idx) => (
-                    <div key={idx}>※【註{idx + 1}】{note.date} {note.unit}-{note.title}（{note.planType}）</div>
-                  ))}
-                </div>
-              )}
+              {/* ═══ 註腳: 新格式 ═══ */}
+              <div className="mt-3 px-2 text-xs text-[var(--color-text-muted)] space-y-0.5">
+                <div>※【註1】{NOTE1_TEXT}</div>
+                {networkEventNotes.map((note) => (
+                  <div key={note.noteNum}>※【註{note.noteNum}】{note.startTime}~{note.endTime} {note.title}（{note.planType}）累計停止時間{note.totalHours}小時</div>
+                ))}
+              </div>
             </>
           )}
 
