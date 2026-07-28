@@ -696,13 +696,15 @@ export default function ReportsPage() {
     endTime: string
     title: string
     planType: string
+    rawPlanType: string
     totalHours: number
     deviceLabels: string[]
+    periodIdxs: number[]
   }
 
   const NOTE1_TEXT = '每季可用率為每月累計,將在每季最後一月進行可用率按季計算。'
 
-  const { networkEventNotes, notesByDeviceLabel } = useMemo(() => {
+  const { networkEventNotes, notesByDevicePlanned, notesByDeviceUnplanned } = useMemo(() => {
     const qStart = quarterRange.start
     const qEnd = quarterRange.end
 
@@ -721,6 +723,7 @@ export default function ReportsPage() {
       endTime: string
       title: string
       planType: string
+      rawPlanType: string
       totalHours: number
       deviceLabels: Set<string>
     }
@@ -750,6 +753,7 @@ export default function ReportsPage() {
           endTime: formatDT(ed),
           title: e.title,
           planType: e.plan_type === 'planned' ? '計畫性' : '非計畫性',
+          rawPlanType: e.plan_type,
           totalHours: hours,
           deviceLabels: new Set([groupLabel]),
         })
@@ -764,19 +768,23 @@ export default function ReportsPage() {
       endTime: n.endTime,
       title: n.title,
       planType: n.planType,
+      rawPlanType: n.rawPlanType,
       totalHours: n.totalHours,
       deviceLabels: Array.from(n.deviceLabels),
+      periodIdxs: [],
     }))
 
-    const byDeviceLabel = new Map<string, number[]>()
+    const byPlanned = new Map<string, number[]>()
+    const byUnplanned = new Map<string, number[]>()
     notes.forEach((note) => {
+      const map = note.rawPlanType === 'planned' ? byPlanned : byUnplanned
       note.deviceLabels.forEach((label) => {
-        if (!byDeviceLabel.has(label)) byDeviceLabel.set(label, [])
-        byDeviceLabel.get(label)!.push(note.noteNum)
+        if (!map.has(label)) map.set(label, [])
+        map.get(label)!.push(note.noteNum)
       })
     })
 
-    return { networkEventNotes: notes, notesByDeviceLabel: byDeviceLabel }
+    return { networkEventNotes: notes, notesByDevicePlanned: byPlanned, notesByDeviceUnplanned: byUnplanned }
   }, [downtimeEvents, deviceGroups, quarterRange])
 
   // ═══ Circuit summaries for fiber report ═══
@@ -876,7 +884,7 @@ export default function ReportsPage() {
   }, [serverAssets, serverEvents, quarterPeriods])
 
   // ═══ Server: Quarter event footnotes (same note system) ═══
-  const { serverEventNotes, serverNotesByLabel } = useMemo(() => {
+  const { serverEventNotes, serverNotesByPlanned, serverNotesByUnplanned } = useMemo(() => {
     const qStart = quarterRange.start
     const qEnd = quarterRange.end
 
@@ -895,6 +903,7 @@ export default function ReportsPage() {
       endTime: string
       title: string
       planType: string
+      rawPlanType: string
       totalHours: number
       labels: Set<string>
     }
@@ -924,6 +933,7 @@ export default function ReportsPage() {
           endTime: formatDT(ed),
           title: e.title,
           planType: e.plan_type === 'planned' ? '計畫性' : '非計畫性',
+          rawPlanType: e.plan_type,
           totalHours: hours,
           labels: new Set([assetName]),
         })
@@ -938,19 +948,23 @@ export default function ReportsPage() {
       endTime: n.endTime,
       title: n.title,
       planType: n.planType,
+      rawPlanType: n.rawPlanType,
       totalHours: n.totalHours,
       deviceLabels: Array.from(n.labels),
+      periodIdxs: [],
     }))
 
-    const byLabel = new Map<string, number[]>()
+    const byPlanned = new Map<string, number[]>()
+    const byUnplanned = new Map<string, number[]>()
     notes.forEach((note) => {
+      const map = note.rawPlanType === 'planned' ? byPlanned : byUnplanned
       note.deviceLabels.forEach((label) => {
-        if (!byLabel.has(label)) byLabel.set(label, [])
-        byLabel.get(label)!.push(note.noteNum)
+        if (!map.has(label)) map.set(label, [])
+        map.get(label)!.push(note.noteNum)
       })
     })
 
-    return { serverEventNotes: notes, serverNotesByLabel: byLabel }
+    return { serverEventNotes: notes, serverNotesByPlanned: byPlanned, serverNotesByUnplanned: byUnplanned }
   }, [serverEvents, serverAssets, quarterRange])
 
   // ═══ Chart data for network ═══
@@ -1031,8 +1045,10 @@ export default function ReportsPage() {
     }))
 
     quarterlyReport.forEach((device) => {
-      const deviceNotes = notesByDeviceLabel.get(device.label)
-      const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
+      const plannedNotes = notesByDevicePlanned.get(device.label)
+      const plannedNoteLabel = plannedNotes?.length ? plannedNotes.map((n) => `[註${n}]`).join('') : ''
+      const unplannedNotes = notesByDeviceUnplanned.get(device.label)
+      const unplannedNoteLabel = unplannedNotes?.length ? unplannedNotes.map((n) => `[註${n}]`).join('') : ''
 
       device.monthRows.forEach((row, i) => {
         const cells = []
@@ -1054,8 +1070,8 @@ export default function ReportsPage() {
       const totalCells = [
         docxCell(`${rocYear}年第${quarter}季總計`, { bold: true }),
         docxCell(device.totalCount > 1 ? `${device.quarterly.hoursPerDevice}*${device.totalCount}` : `${device.quarterly.hoursPerDevice}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.plannedHours}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.unplannedHours}${deviceNoteLabel ? `\n${deviceNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.plannedHours}${plannedNoteLabel ? `\n${plannedNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.unplannedHours}${unplannedNoteLabel ? `\n${unplannedNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
         docxCell(`${device.quarterly.availabilityPct}%\n[註1]`, { alignment: AlignmentType.RIGHT, bold: true }),
       ]
       qRows.push(new TableRow({ children: totalCells }))
@@ -1130,8 +1146,10 @@ export default function ReportsPage() {
     }))
 
     serverQuarterlyReport.forEach((device) => {
-      const deviceNotes = serverNotesByLabel.get(device.label)
-      const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
+      const plannedNotes = serverNotesByPlanned.get(device.label)
+      const plannedNoteLabel = plannedNotes?.length ? plannedNotes.map((n) => `[註${n}]`).join('') : ''
+      const unplannedNotes = serverNotesByUnplanned.get(device.label)
+      const unplannedNoteLabel = unplannedNotes?.length ? unplannedNotes.map((n) => `[註${n}]`).join('') : ''
 
       device.monthRows.forEach((row, i) => {
         const cells = []
@@ -1153,8 +1171,8 @@ export default function ReportsPage() {
       const totalCells = [
         docxCell(`${rocYear}年第${quarter}季總計`, { bold: true }),
         docxCell(device.totalCount > 1 ? `${device.quarterly.hoursPerDevice}*${device.totalCount}` : `${device.quarterly.hoursPerDevice}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.plannedHours}`, { alignment: AlignmentType.RIGHT, bold: true }),
-        docxCell(`${device.quarterly.unplannedHours}${deviceNoteLabel ? `\n${deviceNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.plannedHours}${plannedNoteLabel ? `\n${plannedNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
+        docxCell(`${device.quarterly.unplannedHours}${unplannedNoteLabel ? `\n${unplannedNoteLabel}` : ''}`, { alignment: AlignmentType.RIGHT, bold: true }),
         docxCell(`${device.quarterly.availabilityPct}%\n[註1]`, { alignment: AlignmentType.RIGHT, bold: true }),
       ]
       quarterlyRows.push(new TableRow({ children: totalCells }))
@@ -1634,8 +1652,10 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   {serverQuarterlyReport.map((device) => {
-                    const deviceNotes = serverNotesByLabel.get(device.label)
-                    const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
+                    const plannedNotes = serverNotesByPlanned.get(device.label)
+                    const plannedNoteLabel = plannedNotes?.length ? plannedNotes.map((n) => `[註${n}]`).join('') : ''
+                    const unplannedNotes = serverNotesByUnplanned.get(device.label)
+                    const unplannedNoteLabel = unplannedNotes?.length ? unplannedNotes.map((n) => `[註${n}]`).join('') : ''
                     return (
                     <React.Fragment key={device.label}>
                       {device.monthRows.map((row, i) => (
@@ -1676,10 +1696,13 @@ export default function ReportsPage() {
                             ? `${device.quarterly.hoursPerDevice}*${device.totalCount}`
                             : device.quarterly.hoursPerDevice}
                         </td>
-                        <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">{device.quarterly.plannedHours}</td>
+                        <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">
+                          {device.quarterly.plannedHours}
+                          {plannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{plannedNoteLabel}</span></>}
+                        </td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">
                           {device.quarterly.unplannedHours}
-                          {deviceNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{deviceNoteLabel}</span></>}
+                          {unplannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{unplannedNoteLabel}</span></>}
                         </td>
                         <td className="text-right px-4 py-2.5">
                           <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : device.quarterly.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
@@ -1776,8 +1799,10 @@ export default function ReportsPage() {
                     </thead>
                     <tbody>
                       {quarterlyReport.map((device) => {
-                        const deviceNotes = notesByDeviceLabel.get(device.label)
-                        const deviceNoteLabel = deviceNotes?.length ? deviceNotes.map((n) => `[註${n}]`).join('') : ''
+                        const plannedNotes = notesByDevicePlanned.get(device.label)
+                        const plannedNoteLabel = plannedNotes?.length ? plannedNotes.map((n) => `[註${n}]`).join('') : ''
+                        const unplannedNotes = notesByDeviceUnplanned.get(device.label)
+                        const unplannedNoteLabel = unplannedNotes?.length ? unplannedNotes.map((n) => `[註${n}]`).join('') : ''
                         return (
                         <React.Fragment key={device.label}>
                           {device.monthRows.map((row, i) => (
@@ -1818,10 +1843,13 @@ export default function ReportsPage() {
                                 ? `${device.quarterly.hoursPerDevice}*${device.totalCount}`
                                 : device.quarterly.hoursPerDevice}
                             </td>
-                            <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">{device.quarterly.plannedHours}</td>
+                            <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">
+                              {device.quarterly.plannedHours}
+                              {plannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{plannedNoteLabel}</span></>}
+                            </td>
                             <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">
                               {device.quarterly.unplannedHours}
-                              {deviceNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{deviceNoteLabel}</span></>}
+                              {unplannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{unplannedNoteLabel}</span></>}
                             </td>
                             <td className="text-right px-4 py-2.5">
                               <span className={`font-bold ${device.quarterly.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : device.quarterly.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
