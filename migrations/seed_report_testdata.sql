@@ -89,36 +89,36 @@ SELECT id, 'TLC-ZZ-001',  '50Mbps',  '10.4.1.1' FROM organizations WHERE name = 
 -- ══════════════════════════════════════════════
 
 -- 事件A：機房空調維護 — 同時影響總局內網防火牆 + 總局內網核心交換器（同事件共用一個註）
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'planned', '機房空調維護-計畫性停機', '2026-07-10 08:00', '2026-07-10 12:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '機房空調維護-計畫性停機', '2026-07-10 08:00', '2026-07-10 12:00', false
 FROM org_devices WHERE name = '總局內網防火牆';
 
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'planned', '機房空調維護-計畫性停機', '2026-07-10 08:00', '2026-07-10 12:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '機房空調維護-計畫性停機', '2026-07-10 08:00', '2026-07-10 12:00', false
 FROM org_devices WHERE name = '總局內網核心交換器';
 
 -- 事件B：防火牆韌體更新 — 只影響總局外網防火牆
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'planned', '防火牆韌體更新', '2026-07-15 22:00', '2026-07-16 02:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '防火牆韌體更新', '2026-07-15 22:00', '2026-07-16 02:00', false
 FROM org_devices WHERE name = '總局外網防火牆';
 
 -- 事件C：異常斷電 — 非計畫性，影響總局內網主機交換器
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'unplanned', 'UPS異常導致設備重啟', '2026-07-20 14:30', '2026-07-20 15:45', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', 'UPS異常導致設備重啟', '2026-07-20 14:30', '2026-07-20 15:45', false
 FROM org_devices WHERE name = '總局內網主機交換器';
 
 -- 事件D：ISP線路中斷（外部因素）— 影響總局外網核心交換器
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'unplanned', 'ISP骨幹線路中斷', '2026-08-05 09:00', '2026-08-05 11:30', true
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', 'ISP骨幹線路中斷', '2026-08-05 09:00', '2026-08-05 11:30', true
 FROM org_devices WHERE name = '總局外網核心交換器';
 
 -- 事件E：分局設備維護 — 影響分局防火牆（跨分局同事件）
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'planned', '分局防火牆政策更新', '2026-08-12 20:00', '2026-08-12 22:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '分局防火牆政策更新', '2026-08-12 20:00', '2026-08-12 22:00', false
 FROM org_devices WHERE name = '臺北局防火牆';
 
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'network', 'planned', '分局防火牆政策更新', '2026-08-12 20:00', '2026-08-12 22:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '分局防火牆政策更新', '2026-08-12 20:00', '2026-08-12 22:00', false
 FROM org_devices WHERE name = '高雄局防火牆';
 
 -- ══════════════════════════════════════════════
@@ -142,20 +142,20 @@ FROM org_circuits WHERE circuit_number = 'TLC-ZZ-001';
 -- ══════════════════════════════════════════════
 
 -- 伺服器韌體更新 — 第1台伺服器
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'server', 'planned', '伺服器韌體更新-計畫性維護', '2026-07-12 22:00', '2026-07-13 02:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'server', name, 'downtime', 'planned', '伺服器韌體更新-計畫性維護', '2026-07-12 22:00', '2026-07-13 02:00', false
 FROM hardware_assets WHERE is_active = true ORDER BY name LIMIT 1;
 
 -- 硬碟故障 — 第2台伺服器
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'server', 'unplanned', '硬碟故障-緊急更換', '2026-08-01 10:00', '2026-08-01 14:00', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'server', name, 'downtime', 'unplanned', '硬碟故障-緊急更換', '2026-08-01 10:00', '2026-08-01 14:00', false
 FROM hardware_assets WHERE is_active = true ORDER BY name LIMIT 1 OFFSET 1;
 
 -- 同一事件影響多台伺服器（共用一個註）— 機房冷氣故障
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'server', 'unplanned', '機房冷氣故障-設備過熱關機', '2026-07-22 13:00', '2026-07-22 15:30', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'server', name, 'downtime', 'unplanned', '機房冷氣故障-設備過熱關機', '2026-07-22 13:00', '2026-07-22 15:30', false
 FROM hardware_assets WHERE is_active = true ORDER BY name LIMIT 1;
 
-INSERT INTO downtime_events (asset_id, asset_type, plan_type, title, start_time, end_time, is_external)
-SELECT id, 'server', 'unplanned', '機房冷氣故障-設備過熱關機', '2026-07-22 13:00', '2026-07-22 15:30', false
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'server', name, 'downtime', 'unplanned', '機房冷氣故障-設備過熱關機', '2026-07-22 13:00', '2026-07-22 15:30', false
 FROM hardware_assets WHERE is_active = true ORDER BY name LIMIT 1 OFFSET 1;
