@@ -2063,7 +2063,7 @@ export default function ReportsPage() {
                         <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{ev.startTime}</td>
                         <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{ev.endTime}</td>
                         <td className="py-2 px-2 text-xs">{ev.unit}</td>
-                        <td className="py-2 px-2 text-xs break-words">{ev.assetName}</td>
+                        <td className="py-2 px-2 text-xs break-words">{ev.assetName.startsWith(ev.unit) ? ev.assetName.slice(ev.unit.length) : ev.assetName}</td>
                         <td className="py-2 px-2 break-words">{ev.title}</td>
                         <td className="py-2 px-2 whitespace-nowrap">
                           <span className={`text-xs px-1.5 py-0.5 rounded ${ev.planType === '計畫性' ? 'bg-[var(--color-warning-dim)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-dim)] text-[var(--color-danger)]'}`}>
