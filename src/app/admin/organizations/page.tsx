@@ -246,25 +246,57 @@ export default function OrganizationsPage() {
           .eq('id', editingId)
         if (orgErr) throw orgErr
 
-        // Replace devices: delete existing, insert new
-        const { error: delDevErr } = await supabase
+        // Fetch existing devices for this org
+        const { data: existingDevices } = await supabase
           .from('org_devices')
-          .delete()
+          .select('id, name, zone, device_type, quantity')
           .eq('org_id', editingId)
-        if (delDevErr) throw delDevErr
+        const existingMap = new Map<string, { id: string; name: string; quantity: number }>()
+        ;(existingDevices ?? []).forEach((d: { id: string; name: string; zone: string; device_type: string; quantity: number }) => {
+          existingMap.set(`${d.zone}_${d.device_type}`, { id: d.id, name: d.name, quantity: d.quantity })
+        })
 
-        if (devices.length > 0) {
-          const { error: insDevErr } = await supabase
-            .from('org_devices')
-            .insert(devices.map((d) => ({
-              org_id: editingId,
-              name: d.name,
-              zone: d.zone,
-              device_type: d.device_type,
-              vendor: d.vendor,
-              quantity: d.quantity,
-            })))
-          if (insDevErr) throw insDevErr
+        const desiredKeys = new Set<string>()
+        for (const d of devices) {
+          const key = `${d.zone}_${d.device_type}`
+          desiredKeys.add(key)
+          const existing = existingMap.get(key)
+          if (existing) {
+            const newName = `${name}${ZONE_LABELS[d.zone]}${d.device_type}`
+            if (existing.name !== newName || existing.quantity !== d.quantity) {
+              const { error } = await supabase
+                .from('org_devices')
+                .update({ name: newName, quantity: d.quantity })
+                .eq('id', existing.id)
+              if (error) throw error
+              // Update asset_name in downtime_events referencing this device
+              if (existing.name !== newName) {
+                await supabase
+                  .from('downtime_events')
+                  .update({ asset_name: newName })
+                  .eq('asset_id', existing.id)
+              }
+            }
+          } else {
+            const { error } = await supabase
+              .from('org_devices')
+              .insert({
+                org_id: editingId,
+                name: `${name}${ZONE_LABELS[d.zone]}${d.device_type}`,
+                zone: d.zone,
+                device_type: d.device_type,
+                vendor: d.vendor,
+                quantity: d.quantity,
+              })
+            if (error) throw error
+          }
+        }
+
+        // Remove devices no longer in the form
+        for (const [key, existing] of existingMap) {
+          if (!desiredKeys.has(key)) {
+            await supabase.from('org_devices').delete().eq('id', existing.id)
+          }
         }
 
         // Replace circuits: delete existing, insert new
