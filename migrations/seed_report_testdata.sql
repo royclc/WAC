@@ -121,6 +121,40 @@ INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_
 SELECT id, 'network', name, 'downtime', 'planned', '分局防火牆政策更新', '2026-08-12 20:00', '2026-08-12 22:00', false
 FROM org_devices WHERE name = '高雄局防火牆';
 
+-- 事件F：機房電力異常 — 非計畫性，同時影響4種不同設備類型（測試跨設備類型共用同一個註）
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', '機房電力異常-多設備受影響', '2026-09-01 10:00', '2026-09-01 13:00', false
+FROM org_devices WHERE name = '總局內網防火牆';
+
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', '機房電力異常-多設備受影響', '2026-09-01 10:00', '2026-09-01 13:00', false
+FROM org_devices WHERE name = '總局內網核心交換器';
+
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', '機房電力異常-多設備受影響', '2026-09-01 10:00', '2026-09-01 13:00', false
+FROM org_devices WHERE name = '總局內網主機交換器';
+
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', '機房電力異常-多設備受影響', '2026-09-01 10:00', '2026-09-01 13:00', false
+FROM org_devices WHERE name = '總局內網邊界交換器';
+
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'unplanned', '機房電力異常-多設備受影響', '2026-09-01 10:00', '2026-09-01 13:00', false
+FROM org_devices WHERE name = '總局內網聚合交換器';
+
+-- 事件G：計畫性韌體升級 — 同時影響3種設備（測試計畫性跨設備共用註）
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '全面韌體升級-計畫性維護', '2026-09-10 22:00', '2026-09-11 04:00', false
+FROM org_devices WHERE name = '總局外網防火牆';
+
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '全面韌體升級-計畫性維護', '2026-09-10 22:00', '2026-09-11 04:00', false
+FROM org_devices WHERE name = '總局外網核心交換器';
+
+INSERT INTO downtime_events (asset_id, asset_type, asset_name, event_type, plan_type, title, start_time, end_time, is_external)
+SELECT id, 'network', name, 'downtime', 'planned', '全面韌體升級-計畫性維護', '2026-09-10 22:00', '2026-09-11 04:00', false
+FROM org_devices WHERE name = '總局外網主機交換器';
+
 -- ══════════════════════════════════════════════
 -- 5. 線路事件（circuit_events）
 -- ══════════════════════════════════════════════
