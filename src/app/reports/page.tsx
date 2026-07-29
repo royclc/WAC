@@ -668,23 +668,23 @@ export default function ReportsPage() {
     return `${roc}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
   }
 
-  function showNetworkEventDetail(group: DeviceGroup, planType: 'planned' | 'unplanned') {
+  function showNetworkEventDetail(group: DeviceGroup, planType: 'planned' | 'unplanned', period?: QuarterPeriod) {
     const assetIds = new Set(group.assets.map((a) => a.id))
     const assetMap = new Map(group.assets.map((a) => [a.id, a]))
-    const qStart = quarterRange.start
-    const qEnd = quarterRange.end
+    const pStart = period?.start ?? quarterRange.start
+    const pEnd = period?.end ?? quarterRange.end
     const events = downtimeEvents
       .filter((e) => assetIds.has(e.asset_id) && e.plan_type === planType)
       .filter((e) => {
         const eStart = parseLocalDate(e.start_time)
         const eEnd = parseLocalDate(e.end_time)
-        return eEnd > qStart && eStart < qEnd
+        return eEnd > pStart && eStart < pEnd
       })
       .map((e) => {
         const eStart = parseLocalDate(e.start_time)
         const eEnd = parseLocalDate(e.end_time)
-        const s = eStart < qStart ? qStart : eStart
-        const ed = eEnd > qEnd ? qEnd : eEnd
+        const s = eStart < pStart ? pStart : eStart
+        const ed = eEnd > pEnd ? pEnd : eEnd
         const hours = Math.round(((ed.getTime() - s.getTime()) / 3600000) * 100) / 100
         const asset = assetMap.get(e.asset_id)
         return {
@@ -697,8 +697,9 @@ export default function ReportsPage() {
           hours,
         }
       })
+    const periodLabel = period ? ` (${period.label})` : ''
     setDetailPopup({
-      title: `${group.label} — ${planType === 'planned' ? '計畫性' : '非計畫性'}停止服務明細`,
+      title: `${group.label} — ${planType === 'planned' ? '計畫性' : '非計畫性'}停止服務明細${periodLabel}`,
       events,
     })
   }
@@ -1924,10 +1925,18 @@ export default function ReportsPage() {
                                   : ''}
                               </td>
                               <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">
-                                {row.hasData ? row.plannedHours : ''}
+                                {row.hasData && row.plannedHours > 0 ? (
+                                  <button onClick={() => showNetworkEventDetail(group, 'planned', row.period)} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                                    {row.plannedHours}
+                                  </button>
+                                ) : (row.hasData ? row.plannedHours : '')}
                               </td>
                               <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">
-                                {row.hasData ? row.unplannedHours : ''}
+                                {row.hasData && row.unplannedHours > 0 ? (
+                                  <button onClick={() => showNetworkEventDetail(group, 'unplanned', row.period)} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                                    {row.unplannedHours}
+                                  </button>
+                                ) : (row.hasData ? row.unplannedHours : '')}
                               </td>
                               <td className="text-right px-4 py-2.5">
                                 {row.hasData ? (
@@ -2027,7 +2036,7 @@ export default function ReportsPage() {
       {/* Event detail popup */}
       {detailPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailPopup(null)}>
-          <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] shadow-2xl max-w-5xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
               <h3 className="font-semibold text-base">{detailPopup.title}</h3>
               <button onClick={() => setDetailPopup(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xl leading-none px-2">&times;</button>
@@ -2036,16 +2045,16 @@ export default function ReportsPage() {
               {detailPopup.events.length === 0 ? (
                 <p className="text-sm text-[var(--color-text-muted)]">無事件記錄</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="border-b border-[var(--color-border)] text-xs text-[var(--color-text-muted)]">
-                      <th className="text-left py-2 px-2">起始時間</th>
-                      <th className="text-left py-2 px-2">結束時間</th>
-                      <th className="text-left py-2 px-2">單位</th>
-                      <th className="text-left py-2 px-2">設備</th>
+                      <th className="text-left py-2 px-2 w-[130px]">起始時間</th>
+                      <th className="text-left py-2 px-2 w-[130px]">結束時間</th>
+                      <th className="text-left py-2 px-2 w-[80px]">單位</th>
+                      <th className="text-left py-2 px-2 w-[140px]">設備</th>
                       <th className="text-left py-2 px-2">事件</th>
-                      <th className="text-left py-2 px-2">類型</th>
-                      <th className="text-right py-2 px-2">時數</th>
+                      <th className="text-left py-2 px-2 w-[60px]">類型</th>
+                      <th className="text-right py-2 px-2 w-[60px]">時數</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2054,14 +2063,14 @@ export default function ReportsPage() {
                         <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{ev.startTime}</td>
                         <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{ev.endTime}</td>
                         <td className="py-2 px-2 text-xs">{ev.unit}</td>
-                        <td className="py-2 px-2 text-xs">{ev.assetName}</td>
-                        <td className="py-2 px-2">{ev.title}</td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-2 text-xs break-words">{ev.assetName}</td>
+                        <td className="py-2 px-2 break-words">{ev.title}</td>
+                        <td className="py-2 px-2 whitespace-nowrap">
                           <span className={`text-xs px-1.5 py-0.5 rounded ${ev.planType === '計畫性' ? 'bg-[var(--color-warning-dim)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-dim)] text-[var(--color-danger)]'}`}>
                             {ev.planType}
                           </span>
                         </td>
-                        <td className="py-2 px-2 text-right font-mono">{ev.hours}</td>
+                        <td className="py-2 px-2 text-right font-mono whitespace-nowrap">{ev.hours}</td>
                       </tr>
                     ))}
                   </tbody>
