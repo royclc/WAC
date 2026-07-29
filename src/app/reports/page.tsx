@@ -745,7 +745,26 @@ export default function ReportsPage() {
 
   // ═══ Network: Quarter event footnotes (new system) ═══
   // [註1] = 固定說明文字, [註2+] = 各事件（不同設備類型同事件共用同一個註）
-  interface EventDetail {
+  interface NoteEventLine {
+    startTime: string
+    endTime: string
+    unit: string
+    title: string
+    planType: string
+    rawPlanType: string
+    hours: number
+    deviceBreakdown: Array<{ deviceType: string; quantity: number }>
+  }
+
+  interface NetworkDeviceNote {
+    noteNum: number
+    deviceLabel: string
+    eventLines: NoteEventLine[]
+    hasPlanned: boolean
+    hasUnplanned: boolean
+  }
+
+  interface ServerEventDetail {
     startTime: string
     endTime: string
     title: string
@@ -754,73 +773,112 @@ export default function ReportsPage() {
     totalHours: number
   }
 
-  interface DeviceNote {
+  interface ServerDeviceNote {
     noteNum: number
     deviceLabel: string
-    events: EventDetail[]
+    events: ServerEventDetail[]
     hasPlanned: boolean
     hasUnplanned: boolean
   }
 
   const NOTE1_TEXT = '每季可用率為每月累計,將在每季最後一月進行可用率按季計算。'
 
+  const formatNoteEventText = (ev: NoteEventLine) => {
+    const breakdown = ev.deviceBreakdown
+      .map((d) => `${d.quantity}台${d.deviceType}累計停止服務${ev.hours}*${d.quantity}小時`)
+      .join('；')
+    return `■ ${ev.startTime}～${ev.endTime}，${ev.unit}設備，${ev.title}，共停止${ev.hours}小時。${breakdown}。`
+  }
+
   const { networkDeviceNotes, noteByDevicePlanned, noteByDeviceUnplanned } = useMemo(() => {
     const qStart = quarterRange.start
     const qEnd = quarterRange.end
+
+    const assetMap = new Map<string, NetworkAsset>()
+    networkAssets.forEach((a) => assetMap.set(a.id, a))
 
     const assetToGroup = new Map<string, string>()
     deviceGroups.forEach((g) => g.assets.forEach((a) => assetToGroup.set(a.id, g.label)))
 
     const pad2 = (n: number) => String(n).padStart(2, '0')
-    const formatDT = (d: Date) => {
-      const roc = d.getFullYear() - 1911
-      return `${roc}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-    }
+    const fmtShort = (d: Date) => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 
-    const deviceEventsMap = new Map<string, Map<string, EventDetail>>()
+    const globalMap = new Map<string, {
+      startTime: string; endTime: string; title: string; rawPlanType: string; hours: number
+      assets: Array<{ unit: string; deviceType: string; quantity: number }>
+    }>()
 
     downtimeEvents.forEach((e) => {
       const eStart = parseLocalDate(e.start_time)
       const eEnd = parseLocalDate(e.end_time)
       if (eEnd <= qStart || eStart >= qEnd) return
 
-      const groupLabel = assetToGroup.get(e.asset_id) ?? ''
-      if (!groupLabel) return
+      const asset = assetMap.get(e.asset_id)
+      if (!asset) return
 
       const s = eStart < qStart ? qStart : eStart
       const ed = eEnd > qEnd ? qEnd : eEnd
       const hours = Math.round(((ed.getTime() - s.getTime()) / 3600000) * 100) / 100
-
       const dedupeKey = `${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
 
-      if (!deviceEventsMap.has(groupLabel)) deviceEventsMap.set(groupLabel, new Map())
-      const evMap = deviceEventsMap.get(groupLabel)!
-      if (!evMap.has(dedupeKey)) {
-        evMap.set(dedupeKey, {
-          startTime: formatDT(s),
-          endTime: formatDT(ed),
-          title: e.title,
-          planType: e.plan_type === 'planned' ? '計畫性' : '非計畫性',
-          rawPlanType: e.plan_type,
-          totalHours: hours,
-        })
+      if (!globalMap.has(dedupeKey)) {
+        globalMap.set(dedupeKey, { startTime: fmtShort(s), endTime: fmtShort(ed), title: e.title, rawPlanType: e.plan_type, hours, assets: [] })
+      }
+      const entry = globalMap.get(dedupeKey)!
+      if (!entry.assets.some((a) => a.unit === asset.unit && a.deviceType === asset.deviceType)) {
+        entry.assets.push({ unit: asset.unit, deviceType: asset.deviceType, quantity: asset.quantity })
       }
     })
 
-    const groupOrder = deviceGroups.map((g) => g.label)
-    const notes: DeviceNote[] = []
-    let noteNum = 2
-    groupOrder.forEach((label) => {
-      const evMap = deviceEventsMap.get(label)
-      if (!evMap || evMap.size === 0) return
-      const events = Array.from(evMap.values())
-      notes.push({
-        noteNum: noteNum++,
-        deviceLabel: label,
-        events,
-        hasPlanned: events.some((ev) => ev.rawPlanType === 'planned'),
-        hasUnplanned: events.some((ev) => ev.rawPlanType === 'unplanned'),
+    const deviceNoteData = new Map<string, { lines: NoteEventLine[]; hasPlanned: boolean; hasUnplanned: boolean }>()
+
+    deviceGroups.forEach((group) => {
+      const assetIds = new Set(group.assets.map((a) => a.id))
+      const seenKeys = new Set<string>()
+
+      downtimeEvents.forEach((e) => {
+        if (!assetIds.has(e.asset_id)) return
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
+        if (eEnd <= qStart || eStart >= qEnd) return
+
+        const dedupeKey = `${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+        if (seenKeys.has(dedupeKey)) return
+        seenKeys.add(dedupeKey)
+
+        const ge = globalMap.get(dedupeKey)
+        if (!ge) return
+
+        const unitMap = new Map<string, Map<string, number>>()
+        ge.assets.forEach((a) => {
+          if (!unitMap.has(a.unit)) unitMap.set(a.unit, new Map())
+          unitMap.get(a.unit)!.set(a.deviceType, a.quantity)
+        })
+
+        if (!deviceNoteData.has(group.label)) {
+          deviceNoteData.set(group.label, { lines: [], hasPlanned: false, hasUnplanned: false })
+        }
+        const data = deviceNoteData.get(group.label)!
+        if (ge.rawPlanType === 'planned') data.hasPlanned = true
+        else data.hasUnplanned = true
+
+        unitMap.forEach((dtMap, unit) => {
+          data.lines.push({
+            startTime: ge.startTime, endTime: ge.endTime, unit, title: ge.title,
+            planType: ge.rawPlanType === 'planned' ? '計畫性' : '非計畫性',
+            rawPlanType: ge.rawPlanType, hours: ge.hours,
+            deviceBreakdown: Array.from(dtMap.entries()).map(([dt, qty]) => ({ deviceType: dt, quantity: qty })),
+          })
+        })
       })
+    })
+
+    const notes: NetworkDeviceNote[] = []
+    let noteNum = 2
+    deviceGroups.forEach((g) => {
+      const data = deviceNoteData.get(g.label)
+      if (!data || data.lines.length === 0) return
+      notes.push({ noteNum: noteNum++, deviceLabel: g.label, eventLines: data.lines, hasPlanned: data.hasPlanned, hasUnplanned: data.hasUnplanned })
     })
 
     const byPlanned = new Map<string, number>()
@@ -831,7 +889,7 @@ export default function ReportsPage() {
     })
 
     return { networkDeviceNotes: notes, noteByDevicePlanned: byPlanned, noteByDeviceUnplanned: byUnplanned }
-  }, [downtimeEvents, deviceGroups, quarterRange])
+  }, [downtimeEvents, deviceGroups, quarterRange, networkAssets])
 
   // ═══ Circuit summaries for fiber report ═══
 
@@ -943,7 +1001,7 @@ export default function ReportsPage() {
       return `${roc}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
     }
 
-    const deviceEventsMap = new Map<string, Map<string, EventDetail>>()
+    const deviceEventsMap = new Map<string, Map<string, ServerEventDetail>>()
 
     serverEvents.forEach((e) => {
       const eStart = parseLocalDate(e.start_time)
@@ -974,7 +1032,7 @@ export default function ReportsPage() {
     })
 
     const assetOrder = serverAssets.map((a) => a.name)
-    const notes: DeviceNote[] = []
+    const notes: ServerDeviceNote[] = []
     let noteNum = 2
     assetOrder.forEach((label) => {
       const evMap = deviceEventsMap.get(label)
@@ -1113,12 +1171,10 @@ export default function ReportsPage() {
     const allFootnotes = [
       new Paragraph({ children: [new TextRun({ text: `※【註1】${NOTE1_TEXT}`, size: 18, font: '標楷體' })] }),
       ...networkDeviceNotes.flatMap((note) => [
-        ...note.events.map((ev, i) =>
+        new Paragraph({ children: [new TextRun({ text: `※【註${note.noteNum}】停止服務原因條列如下：`, size: 18, font: '標楷體' })] }),
+        ...note.eventLines.map((ev) =>
           new Paragraph({
-            children: [new TextRun({
-              text: `${i === 0 ? `※【註${note.noteNum}】` : '　　　　'}${ev.startTime}~${ev.endTime} ${ev.title}（${ev.planType}）累計停止時間${ev.totalHours}小時`,
-              size: 18, font: '標楷體',
-            })],
+            children: [new TextRun({ text: `　${formatNoteEventText(ev)}`, size: 18, font: '標楷體' })],
           })
         ),
       ]),
@@ -1218,10 +1274,11 @@ export default function ReportsPage() {
     const hwFootnotes = [
       new Paragraph({ children: [new TextRun({ text: `※【註1】${NOTE1_TEXT}`, size: 18, font: '標楷體' })] }),
       ...serverDeviceNotes.flatMap((note) => [
-        ...note.events.map((ev, i) =>
+        new Paragraph({ children: [new TextRun({ text: `※【註${note.noteNum}】停止服務原因條列如下：`, size: 18, font: '標楷體' })] }),
+        ...note.events.map((ev) =>
           new Paragraph({
             children: [new TextRun({
-              text: `${i === 0 ? `※【註${note.noteNum}】` : '　　　　'}${ev.startTime}~${ev.endTime} ${ev.title}（${ev.planType}）累計停止時間${ev.totalHours}小時`,
+              text: `　■ ${ev.startTime}～${ev.endTime}，${ev.title}（${ev.planType}），累計停止時間${ev.totalHours}小時`,
               size: 18, font: '標楷體',
             })],
           })
@@ -1765,8 +1822,9 @@ export default function ReportsPage() {
             <div>※【註1】{NOTE1_TEXT}</div>
             {serverDeviceNotes.map((note) => (
               <div key={note.noteNum}>
+                <div>※【註{note.noteNum}】停止服務原因條列如下：</div>
                 {note.events.map((ev, i) => (
-                  <div key={i}>{i === 0 ? `※【註${note.noteNum}】` : '　　　　'}{ev.startTime}~{ev.endTime} {ev.title}（{ev.planType}）累計停止時間{ev.totalHours}小時</div>
+                  <div key={i}>　■ {ev.startTime}～{ev.endTime}，{ev.title}（{ev.planType}），累計停止時間{ev.totalHours}小時</div>
                 ))}
               </div>
             ))}
@@ -1925,8 +1983,9 @@ export default function ReportsPage() {
                 <div>※【註1】{NOTE1_TEXT}</div>
                 {networkDeviceNotes.map((note) => (
                   <div key={note.noteNum}>
-                    {note.events.map((ev, i) => (
-                      <div key={i}>{i === 0 ? `※【註${note.noteNum}】` : '　　　　'}{ev.startTime}~{ev.endTime} {ev.title}（{ev.planType}）累計停止時間{ev.totalHours}小時</div>
+                    <div>※【註{note.noteNum}】停止服務原因條列如下：</div>
+                    {note.eventLines.map((ev, i) => (
+                      <div key={i}>　{formatNoteEventText(ev)}</div>
                     ))}
                   </div>
                 ))}
