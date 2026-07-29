@@ -522,6 +522,12 @@ export default function ReportsPage() {
   const [serverEvents, setServerEvents] = useState<ServerEvent[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Event detail popup
+  const [detailPopup, setDetailPopup] = useState<{
+    title: string
+    events: Array<{ startTime: string; endTime: string; unit: string; assetName: string; title: string; planType: string; hours: number }>
+  } | null>(null)
+
   // ── Fetch data from Supabase ──
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -544,26 +550,32 @@ export default function ReportsPage() {
       ])
 
       // Build org lookup
-      const orgMap = new Map<string, { name: string; type: string }>()
-      orgs?.forEach((o: { id: string; name: string; type: string }) => {
-        orgMap.set(o.id, { name: o.name, type: o.type })
+      const orgMap = new Map<string, { name: string; type: string; exclude: boolean }>()
+      orgs?.forEach((o: { id: string; name: string; type: string; exclude_from_availability?: boolean }) => {
+        orgMap.set(o.id, { name: o.name, type: o.type, exclude: o.exclude_from_availability ?? false })
       })
 
-      // Map org_devices -> NetworkAsset
-      const mappedNetworkAssets: NetworkAsset[] = (orgDevices ?? []).map((d: {
-        id: string; org_id: string; name: string; zone: 'internal' | 'external'; device_type: string; vendor: string; quantity: number
-      }) => {
-        const org = orgMap.get(d.org_id)
-        return {
-          id: d.id,
-          name: d.name,
-          unit: org?.name ?? '',
-          majorCategory: org ? orgTypeToMajorCategory(org.type) : '',
-          zone: d.zone,
-          deviceType: d.device_type,
-          quantity: d.quantity,
-        }
-      })
+      // Build set of excluded org IDs
+      const excludedOrgIds = new Set<string>()
+      orgMap.forEach((v, k) => { if (v.exclude) excludedOrgIds.add(k) })
+
+      // Map org_devices -> NetworkAsset (filter out excluded orgs)
+      const mappedNetworkAssets: NetworkAsset[] = (orgDevices ?? [])
+        .filter((d: { org_id: string }) => !excludedOrgIds.has(d.org_id))
+        .map((d: {
+          id: string; org_id: string; name: string; zone: 'internal' | 'external'; device_type: string; vendor: string; quantity: number
+        }) => {
+          const org = orgMap.get(d.org_id)
+          return {
+            id: d.id,
+            name: d.name,
+            unit: org?.name ?? '',
+            majorCategory: org ? orgTypeToMajorCategory(org.type) : '',
+            zone: d.zone,
+            deviceType: d.device_type,
+            quantity: d.quantity,
+          }
+        })
       setNetworkAssets(mappedNetworkAssets)
 
       // Map downtime_events -> DowntimeEvent (asset_type = 'network')
@@ -580,19 +592,21 @@ export default function ReportsPage() {
         }))
       setDowntimeEvents(mappedDowntimeEvents)
 
-      // Map org_circuits -> Circuit
-      const mappedCircuits: Circuit[] = (orgCircuits ?? []).map((c: {
-        id: string; org_id: string; circuit_number: string; bandwidth: string; ip_address: string
-      }) => {
-        const org = orgMap.get(c.org_id)
-        return {
-          id: c.id,
-          unit: org?.name ?? '',
-          circuit_number: c.circuit_number,
-          bandwidth: c.bandwidth,
-          ip_address: c.ip_address ?? '',
-        }
-      })
+      // Map org_circuits -> Circuit (filter out excluded orgs)
+      const mappedCircuits: Circuit[] = (orgCircuits ?? [])
+        .filter((c: { org_id: string }) => !excludedOrgIds.has(c.org_id))
+        .map((c: {
+          id: string; org_id: string; circuit_number: string; bandwidth: string; ip_address: string
+        }) => {
+          const org = orgMap.get(c.org_id)
+          return {
+            id: c.id,
+            unit: org?.name ?? '',
+            circuit_number: c.circuit_number,
+            bandwidth: c.bandwidth,
+            ip_address: c.ip_address ?? '',
+          }
+        })
       setCircuits(mappedCircuits)
 
       // Map circuit_events -> CircuitEvent
@@ -647,6 +661,47 @@ export default function ReportsPage() {
   const deviceGroups = useMemo(() => getDeviceGroups(networkAssets), [networkAssets])
 
   const now = new Date()
+
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const formatDTShort = (d: Date) => {
+    const roc = d.getFullYear() - 1911
+    return `${roc}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  }
+
+  function showNetworkEventDetail(group: DeviceGroup, planType: 'planned' | 'unplanned') {
+    const assetIds = new Set(group.assets.map((a) => a.id))
+    const assetMap = new Map(group.assets.map((a) => [a.id, a]))
+    const qStart = quarterRange.start
+    const qEnd = quarterRange.end
+    const events = downtimeEvents
+      .filter((e) => assetIds.has(e.asset_id) && e.plan_type === planType)
+      .filter((e) => {
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
+        return eEnd > qStart && eStart < qEnd
+      })
+      .map((e) => {
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
+        const s = eStart < qStart ? qStart : eStart
+        const ed = eEnd > qEnd ? qEnd : eEnd
+        const hours = Math.round(((ed.getTime() - s.getTime()) / 3600000) * 100) / 100
+        const asset = assetMap.get(e.asset_id)
+        return {
+          startTime: formatDTShort(s),
+          endTime: formatDTShort(ed),
+          unit: asset?.unit ?? '',
+          assetName: asset?.name ?? '',
+          title: e.title,
+          planType: planType === 'planned' ? '計畫性' : '非計畫性',
+          hours,
+        }
+      })
+    setDetailPopup({
+      title: `${group.label} — ${planType === 'planned' ? '計畫性' : '非計畫性'}停止服務明細`,
+      events,
+    })
+  }
 
   // ═══ Network: Part 1 - Quarterly device breakdown ═══
   const quarterlyReport = useMemo(() => {
@@ -1798,11 +1853,12 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {quarterlyReport.map((device) => {
+                      {quarterlyReport.map((device, deviceIdx) => {
                         const plannedNotes = notesByDevicePlanned.get(device.label)
                         const plannedNoteLabel = plannedNotes?.length ? plannedNotes.map((n) => `[註${n}]`).join('') : ''
                         const unplannedNotes = notesByDeviceUnplanned.get(device.label)
                         const unplannedNoteLabel = unplannedNotes?.length ? unplannedNotes.map((n) => `[註${n}]`).join('') : ''
+                        const group = deviceGroups[deviceIdx]
                         return (
                         <React.Fragment key={device.label}>
                           {device.monthRows.map((row, i) => (
@@ -1844,11 +1900,19 @@ export default function ReportsPage() {
                                 : device.quarterly.hoursPerDevice}
                             </td>
                             <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">
-                              {device.quarterly.plannedHours}
+                              {device.quarterly.plannedHours > 0 ? (
+                                <button onClick={() => showNetworkEventDetail(group, 'planned')} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                                  {device.quarterly.plannedHours}
+                                </button>
+                              ) : device.quarterly.plannedHours}
                               {plannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{plannedNoteLabel}</span></>}
                             </td>
                             <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">
-                              {device.quarterly.unplannedHours}
+                              {device.quarterly.unplannedHours > 0 ? (
+                                <button onClick={() => showNetworkEventDetail(group, 'unplanned')} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                                  {device.quarterly.unplannedHours}
+                                </button>
+                              ) : device.quarterly.unplannedHours}
                               {unplannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{unplannedNoteLabel}</span></>}
                             </td>
                             <td className="text-right px-4 py-2.5">
@@ -1905,6 +1969,53 @@ export default function ReportsPage() {
             </>
           )}
         </>
+      )}
+      {/* Event detail popup */}
+      {detailPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailPopup(null)}>
+          <div className="bg-[var(--color-card)] rounded-xl border border-[var(--color-border)] shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+              <h3 className="font-semibold text-base">{detailPopup.title}</h3>
+              <button onClick={() => setDetailPopup(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xl leading-none px-2">&times;</button>
+            </div>
+            <div className="overflow-auto flex-1 p-5">
+              {detailPopup.events.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-muted)]">無事件記錄</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)] text-xs text-[var(--color-text-muted)]">
+                      <th className="text-left py-2 px-2">起始時間</th>
+                      <th className="text-left py-2 px-2">結束時間</th>
+                      <th className="text-left py-2 px-2">單位</th>
+                      <th className="text-left py-2 px-2">設備</th>
+                      <th className="text-left py-2 px-2">事件</th>
+                      <th className="text-left py-2 px-2">類型</th>
+                      <th className="text-right py-2 px-2">時數</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailPopup.events.map((ev, i) => (
+                      <tr key={i} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-hover)]">
+                        <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{ev.startTime}</td>
+                        <td className="py-2 px-2 font-mono text-xs whitespace-nowrap">{ev.endTime}</td>
+                        <td className="py-2 px-2 text-xs">{ev.unit}</td>
+                        <td className="py-2 px-2 text-xs">{ev.assetName}</td>
+                        <td className="py-2 px-2">{ev.title}</td>
+                        <td className="py-2 px-2">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${ev.planType === '計畫性' ? 'bg-[var(--color-warning-dim)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-dim)] text-[var(--color-danger)]'}`}>
+                            {ev.planType}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono">{ev.hours}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   )

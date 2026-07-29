@@ -42,6 +42,7 @@ interface OrgUnit {
   id: string
   name: string
   type: UnitType
+  exclude_from_availability: boolean
   devices: AutoDevice[]
   circuits: UnitCircuit[]
   created_at: string
@@ -101,6 +102,7 @@ export default function OrganizationsPage() {
   // Form state
   const [formName, setFormName] = useState('')
   const [formType, setFormType] = useState<UnitType>('branch')
+  const [formExcludeAvailability, setFormExcludeAvailability] = useState(false)
   const [formDeviceQty, setFormDeviceQty] = useState<DeviceQtyMap>(() => getDefaultQtyMap('branch'))
   const [formCircuits, setFormCircuits] = useState<Array<{ circuit_number: string; bandwidth: string; ip_address: string }>>([])
 
@@ -132,6 +134,7 @@ export default function OrganizationsPage() {
       id: org.id,
       name: org.name,
       type: org.type as UnitType,
+      exclude_from_availability: org.exclude_from_availability ?? false,
       created_at: org.created_at?.slice(0, 10) ?? '',
       devices: devices
         .filter((d) => d.org_id === org.id)
@@ -175,6 +178,7 @@ export default function OrganizationsPage() {
     setEditingId(null)
     setFormName('')
     setFormType('branch')
+    setFormExcludeAvailability(false)
     setFormDeviceQty(getDefaultQtyMap('branch'))
     setFormCircuits([{ circuit_number: '', bandwidth: '', ip_address: '' }])
     setShowModal(true)
@@ -184,6 +188,7 @@ export default function OrganizationsPage() {
     setEditingId(unit.id)
     setFormName(unit.name)
     setFormType(unit.type)
+    setFormExcludeAvailability(unit.exclude_from_availability)
     // Build qty map from existing devices
     const qtyMap = getDefaultQtyMap(unit.type)
     Object.keys(qtyMap).forEach((k) => { qtyMap[k] = 0 })
@@ -237,7 +242,7 @@ export default function OrganizationsPage() {
         // Update organization
         const { error: orgErr } = await supabase
           .from('organizations')
-          .update({ name, type: formType })
+          .update({ name, type: formType, exclude_from_availability: formExcludeAvailability })
           .eq('id', editingId)
         if (orgErr) throw orgErr
 
@@ -284,7 +289,7 @@ export default function OrganizationsPage() {
         // Create new organization
         const { data: newOrg, error: orgErr } = await supabase
           .from('organizations')
-          .insert({ name, type: formType })
+          .insert({ name, type: formType, exclude_from_availability: formExcludeAvailability })
           .select()
           .single()
         if (orgErr || !newOrg) throw orgErr ?? new Error('Failed to create organization')
@@ -471,6 +476,11 @@ export default function OrganizationsPage() {
                     <span className="text-xs text-[var(--color-text-muted)] ml-2">
                       {UNIT_TYPE_LABELS[unit.type]}
                     </span>
+                    {unit.exclude_from_availability && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-danger-dim)] text-[var(--color-danger)] ml-2">
+                        不列入可用率
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2 ml-4">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-primary-dim)] text-[var(--color-badge-blue-text)]">
@@ -624,6 +634,19 @@ export default function OrganizationsPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formExcludeAvailability}
+                onChange={(e) => setFormExcludeAvailability(e.target.checked)}
+                className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+              />
+              <span className="text-sm">不列入可用率計算</span>
+              <span className="text-xs text-[var(--color-text-muted)]">（勾選後統計報表將排除此單位）</span>
+            </label>
           </div>
 
           {/* Device quantity inputs */}
