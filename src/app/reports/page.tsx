@@ -512,6 +512,7 @@ export default function ReportsPage() {
   const quarter = monthToQuarter(month)
   const [mainTab, setMainTab] = useState<'hardware' | 'network'>('network')
   const [networkSubTab, setNetworkSubTab] = useState<'monthly' | 'fiber'>('monthly')
+  const [upToMonth, setUpToMonth] = useState(true)
 
   // ── Supabase data states ──
   const [networkAssets, setNetworkAssets] = useState<NetworkAsset[]>([])
@@ -658,6 +659,13 @@ export default function ReportsPage() {
   // Quarter periods
   const quarterPeriods = useMemo(() => getQuarterMonthPeriods(rocYear, quarter), [rocYear, quarter])
   const quarterRange = useMemo(() => getQuarterRange(rocYear, quarter), [rocYear, quarter])
+  const currentPeriodIndex = useMemo(() => monthToPeriodIndex(month), [month])
+  const effectiveMaxIndex = upToMonth ? currentPeriodIndex : 2
+  const effectiveRange = useMemo(() => {
+    if (!upToMonth) return quarterRange
+    const endPeriod = quarterPeriods[currentPeriodIndex]
+    return endPeriod ? { start: quarterRange.start, end: endPeriod.end } : quarterRange
+  }, [upToMonth, quarterRange, quarterPeriods, currentPeriodIndex])
   const deviceGroups = useMemo(() => getDeviceGroups(networkAssets), [networkAssets])
 
   const now = new Date()
@@ -671,8 +679,8 @@ export default function ReportsPage() {
   function showNetworkEventDetail(group: DeviceGroup, planType: 'planned' | 'unplanned', period?: QuarterPeriod) {
     const assetIds = new Set(group.assets.map((a) => a.id))
     const assetMap = new Map(group.assets.map((a) => [a.id, a]))
-    const pStart = period?.start ?? quarterRange.start
-    const pEnd = period?.end ?? quarterRange.end
+    const pStart = period?.start ?? effectiveRange.start
+    const pEnd = period?.end ?? effectiveRange.end
     const events = downtimeEvents
       .filter((e) => assetIds.has(e.asset_id) && e.plan_type === planType)
       .filter((e) => {
@@ -707,9 +715,9 @@ export default function ReportsPage() {
   // ═══ Network: Part 1 - Quarterly device breakdown ═══
   const quarterlyReport = useMemo(() => {
     return deviceGroups.map((group) => {
-      const monthRows = quarterPeriods.map((period) => {
+      const monthRows = quarterPeriods.map((period, idx) => {
         const isPast = period.end < now || (period.start <= now && period.end >= now)
-        if (!isPast) {
+        if (!isPast || idx > effectiveMaxIndex) {
           return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, unplannedNonExternalHours: 0, availabilityPct: 0 }
         }
         const stats = calcPeriodStats(group.assets, downtimeEvents, period.start, period.end)
@@ -739,10 +747,9 @@ export default function ReportsPage() {
         },
       }
     })
-  }, [deviceGroups, quarterPeriods, downtimeEvents])
+  }, [deviceGroups, quarterPeriods, downtimeEvents, effectiveMaxIndex])
 
   // ═══ Network: Part 2 - Monthly summary ═══
-  const currentPeriodIndex = useMemo(() => monthToPeriodIndex(month), [month])
 
   // ═══ Network: Quarter event footnotes (new system) ═══
   // [註1] = 固定說明文字, [註2+] = 各事件（不同設備類型同事件共用同一個註）
@@ -792,8 +799,8 @@ export default function ReportsPage() {
   }
 
   const { networkDeviceNotes, noteByDevicePlanned, noteByDeviceUnplanned } = useMemo(() => {
-    const qStart = quarterRange.start
-    const qEnd = quarterRange.end
+    const qStart = effectiveRange.start
+    const qEnd = effectiveRange.end
 
     const assetMap = new Map<string, NetworkAsset>()
     networkAssets.forEach((a) => assetMap.set(a.id, a))
@@ -917,7 +924,7 @@ export default function ReportsPage() {
     })
 
     return { networkDeviceNotes: notes, noteByDevicePlanned: byPlanned, noteByDeviceUnplanned: byUnplanned }
-  }, [downtimeEvents, deviceGroups, quarterRange, networkAssets])
+  }, [downtimeEvents, deviceGroups, effectiveRange, networkAssets])
 
   // ═══ Circuit summaries for fiber report ═══
 
@@ -929,8 +936,8 @@ export default function ReportsPage() {
   }, [rocYear, month])
 
   const circuitAvailSummary = useMemo(() => {
-    const qStart = quarterRange.start
-    const qEnd = quarterRange.end
+    const qStart = effectiveRange.start
+    const qEnd = effectiveRange.end
     return circuits.map((c) => {
       let plannedMin = 0
       let unplannedMin = 0
@@ -959,19 +966,19 @@ export default function ReportsPage() {
         unplannedNonExternalHours: Math.round((unplannedNonExternalMin / 60) * 100) / 100,
       } as CircuitAvailRow
     })
-  }, [circuits, circuitEvents, quarterRange, selectedMonthHours])
+  }, [circuits, circuitEvents, effectiveRange, selectedMonthHours])
 
   const circuitSummaryAll = useMemo(() => {
-    return getCircuitEventSummaries(circuits, circuitEvents, quarterRange.start, quarterRange.end)
-  }, [circuits, circuitEvents, quarterRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, effectiveRange.start, effectiveRange.end)
+  }, [circuits, circuitEvents, effectiveRange])
 
   const circuitSummaryPlanned = useMemo(() => {
-    return getCircuitEventSummaries(circuits, circuitEvents, quarterRange.start, quarterRange.end, 'planned')
-  }, [circuits, circuitEvents, quarterRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, effectiveRange.start, effectiveRange.end, 'planned')
+  }, [circuits, circuitEvents, effectiveRange])
 
   const circuitSummaryUnplanned = useMemo(() => {
-    return getCircuitEventSummaries(circuits, circuitEvents, quarterRange.start, quarterRange.end, 'unplanned')
-  }, [circuits, circuitEvents, quarterRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, effectiveRange.start, effectiveRange.end, 'unplanned')
+  }, [circuits, circuitEvents, effectiveRange])
 
   // ═══ Server (hardware) stats ═══
   const serverMonthlySummary = useMemo(() => {
@@ -982,9 +989,9 @@ export default function ReportsPage() {
 
   const serverQuarterlyReport = useMemo(() => {
     return serverAssets.map((asset) => {
-      const monthRows = quarterPeriods.map((period) => {
+      const monthRows = quarterPeriods.map((period, idx) => {
         const isPast = period.end < now || (period.start <= now && period.end >= now)
-        if (!isPast) {
+        if (!isPast || idx > effectiveMaxIndex) {
           return { period, hasData: false, totalCount: 0, hoursPerDevice: 0, plannedHours: 0, unplannedHours: 0, unplannedNonExternalHours: 0, availabilityPct: 0 }
         }
         const stats = calcServerPeriodStats([asset], serverEvents, period.start, period.end)
@@ -1013,12 +1020,12 @@ export default function ReportsPage() {
         },
       }
     })
-  }, [serverAssets, serverEvents, quarterPeriods])
+  }, [serverAssets, serverEvents, quarterPeriods, effectiveMaxIndex])
 
   // ═══ Server: Quarter event footnotes (same note system) ═══
   const { serverDeviceNotes, serverNoteByPlanned, serverNoteByUnplanned } = useMemo(() => {
-    const qStart = quarterRange.start
-    const qEnd = quarterRange.end
+    const qStart = effectiveRange.start
+    const qEnd = effectiveRange.end
 
     const assetNameMap = new Map<string, string>()
     serverAssets.forEach((a) => assetNameMap.set(a.id, a.name))
@@ -1083,14 +1090,14 @@ export default function ReportsPage() {
     })
 
     return { serverDeviceNotes: notes, serverNoteByPlanned: byPlanned, serverNoteByUnplanned: byUnplanned }
-  }, [serverEvents, serverAssets, quarterRange])
+  }, [serverEvents, serverAssets, effectiveRange])
 
   // ═══ Chart data for network ═══
   const networkChartData: ChartData[] = useMemo(() => {
-    return quarterPeriods.map((period) => {
+    return quarterPeriods.map((period, idx) => {
       const isPast = period.end < now || (period.start <= now && period.end >= now)
       const displayMonth = `${((period.start.getMonth() + 2) % 12) || 12}月`
-      if (!isPast) return { month: displayMonth, planned: 0, unplanned: 0, totalHours: 0 }
+      if (!isPast || idx > effectiveMaxIndex) return { month: displayMonth, planned: 0, unplanned: 0, totalHours: 0 }
 
       let planned = 0
       let unplanned = 0
@@ -1103,14 +1110,14 @@ export default function ReportsPage() {
       })
       return { month: displayMonth, planned, unplanned, totalHours: totalH }
     })
-  }, [quarterPeriods, deviceGroups, downtimeEvents])
+  }, [quarterPeriods, deviceGroups, downtimeEvents, effectiveMaxIndex])
 
   // ═══ Chart data for hardware ═══
   const hardwareChartData: ChartData[] = useMemo(() => {
-    return quarterPeriods.map((period) => {
+    return quarterPeriods.map((period, idx) => {
       const isPast = period.end < now || (period.start <= now && period.end >= now)
       const displayMonth = `${((period.start.getMonth() + 2) % 12) || 12}月`
-      if (!isPast) return { month: displayMonth, planned: 0, unplanned: 0, totalHours: 0 }
+      if (!isPast || idx > effectiveMaxIndex) return { month: displayMonth, planned: 0, unplanned: 0, totalHours: 0 }
 
       let planned = 0
       let unplanned = 0
@@ -1123,14 +1130,13 @@ export default function ReportsPage() {
       })
       return { month: displayMonth, planned, unplanned, totalHours: totalH }
     })
-  }, [serverAssets, serverEvents, quarterPeriods])
+  }, [serverAssets, serverEvents, quarterPeriods, effectiveMaxIndex])
 
   // ── Quarter header display ──
-  const qRange = quarterRange
   const pad = (n: number) => String(n).padStart(2, '0')
-  const qStartRoc = qRange.start.getFullYear() - 1911
-  const qEndRoc = qRange.end.getFullYear() - 1911
-  const quarterHeaderLabel = `${qStartRoc}年${pad(qRange.start.getMonth() + 1)}月${pad(qRange.start.getDate())}日~${qEndRoc}年${pad(qRange.end.getMonth() + 1)}月${pad(qRange.end.getDate())}日`
+  const qStartRoc = effectiveRange.start.getFullYear() - 1911
+  const qEndRoc = effectiveRange.end.getFullYear() - 1911
+  const quarterHeaderLabel = `${qStartRoc}年${pad(effectiveRange.start.getMonth() + 1)}月${pad(effectiveRange.start.getDate())}日~${qEndRoc}年${pad(effectiveRange.end.getMonth() + 1)}月${pad(effectiveRange.end.getDate())}日`
   const yearOptions = Array.from({ length: 5 }, (_, i) => defaultRocYear - 2 + i)
 
   // ═══ Word export: Network ═══
@@ -1668,6 +1674,15 @@ export default function ReportsPage() {
           <div className="text-sm text-[var(--color-text-muted)]">
             所屬季度：第{quarter}季 ({quarterHeaderLabel})
           </div>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none ml-2">
+            <input
+              type="checkbox"
+              checked={upToMonth}
+              onChange={(e) => setUpToMonth(e.target.checked)}
+              className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
+            />
+            僅統計至該月份
+          </label>
         </div>
       </div>
 
