@@ -29,45 +29,45 @@ INSERT INTO organizations (name, type) VALUES
 INSERT INTO org_devices (org_id, name, zone, device_type, vendor, quantity)
 SELECT id, '總局內網防火牆',       'internal', '防火牆',         'Fortinet',  2 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局內網核心交換器',   'internal', '核心網路交換器', 'Cisco',     2 FROM organizations WHERE name = '財政部財政資訊中心'
+SELECT id, '總局內網核心交換器',   'internal', '核心交換器', 'Cisco',     2 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局內網主機交換器',   'internal', '主機網路交換器', 'Cisco',     4 FROM organizations WHERE name = '財政部財政資訊中心'
+SELECT id, '總局內網主機交換器',   'internal', '主機交換器', 'Cisco',     4 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局內網邊界交換器',   'internal', '邊界網路交換器', 'Juniper',   2 FROM organizations WHERE name = '財政部財政資訊中心'
+SELECT id, '總局內網邊界交換器',   'internal', '邊界交換器', 'Juniper',   2 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局內網聚合交換器',   'internal', '聚合網路交換器', 'Cisco',     3 FROM organizations WHERE name = '財政部財政資訊中心';
+SELECT id, '總局內網聚合交換器',   'internal', '聚合交換器', 'Cisco',     3 FROM organizations WHERE name = '財政部財政資訊中心';
 
 -- 總局外網設備
 INSERT INTO org_devices (org_id, name, zone, device_type, vendor, quantity)
 SELECT id, '總局外網防火牆',       'external', '防火牆',         'Palo Alto', 2 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局外網核心交換器',   'external', '核心網路交換器', 'Cisco',     2 FROM organizations WHERE name = '財政部財政資訊中心'
+SELECT id, '總局外網核心交換器',   'external', '核心交換器', 'Cisco',     2 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局外網主機交換器',   'external', '主機網路交換器', 'Cisco',     3 FROM organizations WHERE name = '財政部財政資訊中心'
+SELECT id, '總局外網主機交換器',   'external', '主機交換器', 'Cisco',     3 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局外網邊界交換器',   'external', '邊界網路交換器', 'Juniper',   2 FROM organizations WHERE name = '財政部財政資訊中心'
+SELECT id, '總局外網邊界交換器',   'external', '邊界交換器', 'Juniper',   2 FROM organizations WHERE name = '財政部財政資訊中心'
 UNION ALL
-SELECT id, '總局外網聚合交換器',   'external', '聚合網路交換器', 'Cisco',     2 FROM organizations WHERE name = '財政部財政資訊中心';
+SELECT id, '總局外網聚合交換器',   'external', '聚合交換器', 'Cisco',     2 FROM organizations WHERE name = '財政部財政資訊中心';
 
 -- 分局稽徵所設備
 INSERT INTO org_devices (org_id, name, zone, device_type, vendor, quantity)
 SELECT id, '臺北局防火牆',       'internal', '防火牆',         'Fortinet', 1 FROM organizations WHERE name = '臺北國稅局'
 UNION ALL
-SELECT id, '臺北局前端交換器',   'internal', '前端網路交換器', 'Cisco',    2 FROM organizations WHERE name = '臺北國稅局'
+SELECT id, '臺北局前端交換器',   'internal', '前端交換器', 'Cisco',    2 FROM organizations WHERE name = '臺北國稅局'
 UNION ALL
-SELECT id, '臺北局聚合交換器',   'internal', '聚合網路交換器', 'Cisco',    1 FROM organizations WHERE name = '臺北國稅局'
+SELECT id, '臺北局聚合交換器',   'internal', '聚合交換器', 'Cisco',    1 FROM organizations WHERE name = '臺北國稅局'
 UNION ALL
 SELECT id, '高雄局防火牆',       'internal', '防火牆',         'Fortinet', 1 FROM organizations WHERE name = '高雄國稅局'
 UNION ALL
-SELECT id, '高雄局前端交換器',   'internal', '前端網路交換器', 'Cisco',    2 FROM organizations WHERE name = '高雄國稅局'
+SELECT id, '高雄局前端交換器',   'internal', '前端交換器', 'Cisco',    2 FROM organizations WHERE name = '高雄國稅局'
 UNION ALL
-SELECT id, '高雄局聚合交換器',   'internal', '聚合網路交換器', 'Cisco',    1 FROM organizations WHERE name = '高雄國稅局'
+SELECT id, '高雄局聚合交換器',   'internal', '聚合交換器', 'Cisco',    1 FROM organizations WHERE name = '高雄國稅局'
 UNION ALL
 SELECT id, '中正所防火牆',       'internal', '防火牆',         'Fortinet', 1 FROM organizations WHERE name = '中正稽徵所'
 UNION ALL
-SELECT id, '中正所前端交換器',   'internal', '前端網路交換器', 'Cisco',    1 FROM organizations WHERE name = '中正稽徵所'
+SELECT id, '中正所前端交換器',   'internal', '前端交換器', 'Cisco',    1 FROM organizations WHERE name = '中正稽徵所'
 UNION ALL
-SELECT id, '中正所聚合交換器',   'internal', '聚合網路交換器', 'Cisco',    1 FROM organizations WHERE name = '中正稽徵所';
+SELECT id, '中正所聚合交換器',   'internal', '聚合交換器', 'Cisco',    1 FROM organizations WHERE name = '中正稽徵所';
 
 -- ══════════════════════════════════════════════
 -- 3. 線路（org_circuits）
