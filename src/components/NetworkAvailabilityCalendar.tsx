@@ -293,8 +293,8 @@ export default function NetworkAvailabilityCalendar() {
       { zone: 'internal', label: '內網' },
       { zone: 'external', label: '外網' },
     ]
-    const hqDeviceTypes = ['防火牆', '核心網路交換器', '主機網路交換器', '邊界網路交換器', '聚合網路交換器']
-    const branchDeviceTypes = ['防火牆', '前端網路交換器', '聚合網路交換器']
+    const hqDeviceTypes = ['防火牆', '核心交換器', '主機交換器', '邊界交換器', '聚合交換器']
+    const branchDeviceTypes = ['防火牆', '前端交換器', '聚合交換器']
 
     const rows: Array<{ label: string; stats: AssetStats }> = []
 
