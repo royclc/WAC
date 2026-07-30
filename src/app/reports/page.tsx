@@ -712,6 +712,39 @@ export default function ReportsPage() {
     })
   }
 
+  function showServerEventDetail(asset: ServerAsset, planType: 'planned' | 'unplanned', period?: QuarterPeriod) {
+    const pStart = period?.start ?? effectiveRange.start
+    const pEnd = period?.end ?? effectiveRange.end
+    const evts = serverEvents
+      .filter((e) => e.asset_id === asset.id && e.plan_type === planType)
+      .filter((e) => {
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
+        return eEnd > pStart && eStart < pEnd
+      })
+      .map((e) => {
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
+        const s = eStart < pStart ? pStart : eStart
+        const ed = eEnd > pEnd ? pEnd : eEnd
+        const hours = Math.round(((ed.getTime() - s.getTime()) / 3600000) * 100) / 100
+        return {
+          startTime: formatDTShort(s),
+          endTime: formatDTShort(ed),
+          unit: '',
+          assetName: asset.name,
+          title: e.title,
+          planType: planType === 'planned' ? '計畫性' : '非計畫性',
+          hours,
+        }
+      })
+    const periodLabel = period ? ` (${period.label})` : ''
+    setDetailPopup({
+      title: `${asset.name} — ${planType === 'planned' ? '計畫性' : '非計畫性'}停止服務明細${periodLabel}`,
+      events: evts,
+    })
+  }
+
   // ═══ Network: Part 1 - Quarterly device breakdown ═══
   const quarterlyReport = useMemo(() => {
     return deviceGroups.map((group) => {
@@ -1067,26 +1100,45 @@ export default function ReportsPage() {
     })
 
     const assetOrder = serverAssets.map((a) => a.name)
-    const notes: ServerDeviceNote[] = []
-    let noteNum = 2
+
+    const groupSignatures = new Map<string, string>()
     assetOrder.forEach((label) => {
       const evMap = deviceEventsMap.get(label)
       if (!evMap || evMap.size === 0) return
-      const events = Array.from(evMap.values())
-      notes.push({
-        noteNum: noteNum++,
-        deviceLabel: label,
-        events,
-        hasPlanned: events.some((ev) => ev.rawPlanType === 'planned'),
-        hasUnplanned: events.some((ev) => ev.rawPlanType === 'unplanned'),
-      })
+      groupSignatures.set(label, Array.from(evMap.keys()).sort().join('||'))
+    })
+
+    const signatureToNote = new Map<string, number>()
+    const notes: ServerDeviceNote[] = []
+    let noteNum = 2
+    assetOrder.forEach((label) => {
+      const sig = groupSignatures.get(label)
+      if (!sig) return
+      if (!signatureToNote.has(sig)) {
+        signatureToNote.set(sig, noteNum)
+        const evMap = deviceEventsMap.get(label)!
+        const events = Array.from(evMap.values())
+        notes.push({
+          noteNum,
+          deviceLabel: label,
+          events,
+          hasPlanned: events.some((ev) => ev.rawPlanType === 'planned'),
+          hasUnplanned: events.some((ev) => ev.rawPlanType === 'unplanned'),
+        })
+        noteNum++
+      }
     })
 
     const byPlanned = new Map<string, number>()
     const byUnplanned = new Map<string, number>()
-    notes.forEach((note) => {
-      if (note.hasPlanned) byPlanned.set(note.deviceLabel, note.noteNum)
-      if (note.hasUnplanned) byUnplanned.set(note.deviceLabel, note.noteNum)
+    assetOrder.forEach((label) => {
+      const sig = groupSignatures.get(label)
+      if (!sig) return
+      const num = signatureToNote.get(sig)!
+      const evMap = deviceEventsMap.get(label)!
+      const events = Array.from(evMap.values())
+      if (events.some((ev) => ev.rawPlanType === 'planned')) byPlanned.set(label, num)
+      if (events.some((ev) => ev.rawPlanType === 'unplanned')) byUnplanned.set(label, num)
     })
 
     return { serverDeviceNotes: notes, serverNoteByPlanned: byPlanned, serverNoteByUnplanned: byUnplanned }
@@ -1312,7 +1364,7 @@ export default function ReportsPage() {
         ...note.events.map((ev) =>
           new Paragraph({
             children: [new TextRun({
-              text: `　■ ${ev.startTime}～${ev.endTime}，${ev.title}（${ev.planType}），累計停止時間${ev.totalHours}小時`,
+              text: `　■ ${ev.startTime}～${ev.endTime}，${ev.title}（${ev.planType}），共停止${ev.totalHours}小時。`,
               size: 18, font: '標楷體',
             })],
           })
@@ -1753,21 +1805,37 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {serverMonthlySummary.map((row, idx) => (
-                  <tr key={serverAssets[idx]?.id ?? idx} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
-                    <td className="px-4 py-3 font-medium">{serverAssets[idx]?.name ?? ''}</td>
+                {serverMonthlySummary.map((row, idx) => {
+                  const asset = serverAssets[idx]
+                  const period = quarterPeriods[currentPeriodIndex]
+                  return (
+                  <tr key={asset?.id ?? idx} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
+                    <td className="px-4 py-3 font-medium">{asset?.name ?? ''}</td>
                     <td className="text-right px-4 py-3 font-mono text-xs">
                       {row.totalCount > 1 ? `${row.hoursPerDevice}*${row.totalCount}` : row.hoursPerDevice}
                     </td>
-                    <td className="text-right px-4 py-3 text-[var(--color-warning)]">{row.plannedHours}</td>
-                    <td className="text-right px-4 py-3 text-[var(--color-danger)]">{row.unplannedHours}</td>
+                    <td className="text-right px-4 py-3 text-[var(--color-warning)]">
+                      {asset && row.plannedHours > 0 ? (
+                        <button onClick={() => showServerEventDetail(asset, 'planned', period)} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                          {row.plannedHours}
+                        </button>
+                      ) : row.plannedHours}
+                    </td>
+                    <td className="text-right px-4 py-3 text-[var(--color-danger)]">
+                      {asset && row.unplannedHours > 0 ? (
+                        <button onClick={() => showServerEventDetail(asset, 'unplanned', period)} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                          {row.unplannedHours}
+                        </button>
+                      ) : row.unplannedHours}
+                    </td>
                     <td className="text-right px-4 py-3">
                       <span className={`font-semibold ${row.availabilityPct >= 99.9 ? 'text-[var(--color-success)]' : row.availabilityPct >= 99 ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'}`}>
                         {row.availabilityPct}%
                       </span>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1793,11 +1861,12 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {serverQuarterlyReport.map((device) => {
+                  {serverQuarterlyReport.map((device, deviceIdx) => {
                     const plannedNum = serverNoteByPlanned.get(device.label)
                     const plannedNoteLabel = plannedNum ? `[註${plannedNum}]` : ''
                     const unplannedNum = serverNoteByUnplanned.get(device.label)
                     const unplannedNoteLabel = unplannedNum ? `[註${unplannedNum}]` : ''
+                    const asset = serverAssets[deviceIdx]
                     return (
                     <React.Fragment key={device.label}>
                       {device.monthRows.map((row, i) => (
@@ -1814,10 +1883,18 @@ export default function ReportsPage() {
                               : ''}
                           </td>
                           <td className="text-right px-4 py-2.5 text-[var(--color-warning)]">
-                            {row.hasData ? row.plannedHours : ''}
+                            {row.hasData && row.plannedHours > 0 ? (
+                              <button onClick={() => showServerEventDetail(asset, 'planned', row.period)} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                                {row.plannedHours}
+                              </button>
+                            ) : (row.hasData ? row.plannedHours : '')}
                           </td>
                           <td className="text-right px-4 py-2.5 text-[var(--color-danger)]">
-                            {row.hasData ? row.unplannedHours : ''}
+                            {row.hasData && row.unplannedHours > 0 ? (
+                              <button onClick={() => showServerEventDetail(asset, 'unplanned', row.period)} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                                {row.unplannedHours}
+                              </button>
+                            ) : (row.hasData ? row.unplannedHours : '')}
                           </td>
                           <td className="text-right px-4 py-2.5">
                             {row.hasData ? (
@@ -1839,11 +1916,19 @@ export default function ReportsPage() {
                             : device.quarterly.hoursPerDevice}
                         </td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-warning)] font-semibold">
-                          {device.quarterly.plannedHours}
+                          {device.quarterly.plannedHours > 0 ? (
+                            <button onClick={() => showServerEventDetail(asset, 'planned')} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                              {device.quarterly.plannedHours}
+                            </button>
+                          ) : device.quarterly.plannedHours}
                           {plannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{plannedNoteLabel}</span></>}
                         </td>
                         <td className="text-right px-4 py-2.5 text-[var(--color-danger)] font-semibold">
-                          {device.quarterly.unplannedHours}
+                          {device.quarterly.unplannedHours > 0 ? (
+                            <button onClick={() => showServerEventDetail(asset, 'unplanned')} className="underline decoration-dotted hover:decoration-solid cursor-pointer">
+                              {device.quarterly.unplannedHours}
+                            </button>
+                          ) : device.quarterly.unplannedHours}
                           {unplannedNoteLabel && <><br/><span className="text-xs font-normal text-[var(--color-text-muted)]">{unplannedNoteLabel}</span></>}
                         </td>
                         <td className="text-right px-4 py-2.5">
@@ -1867,7 +1952,7 @@ export default function ReportsPage() {
               <div key={note.noteNum}>
                 <div>※【註{note.noteNum}】停止服務原因條列如下：</div>
                 {note.events.map((ev, i) => (
-                  <div key={i}>　■ {ev.startTime}～{ev.endTime}，{ev.title}（{ev.planType}），累計停止時間{ev.totalHours}小時</div>
+                  <div key={i}>　■ {ev.startTime}～{ev.endTime}，{ev.title}（{ev.planType}），共停止{ev.totalHours}小時。</div>
                 ))}
               </div>
             ))}
