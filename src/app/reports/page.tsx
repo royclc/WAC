@@ -176,7 +176,7 @@ function calcPeriodStats(
       const s = eStart < periodStart ? periodStart : eStart
       const ed = eEnd > periodEnd ? periodEnd : eEnd
       if (ed > s) {
-        const mins = (ed.getTime() - s.getTime()) / 60000
+        const mins = ((ed.getTime() - s.getTime()) / 60000) * asset.quantity
         if (e.plan_type === 'planned') plannedMins += mins
         else {
           unplannedMins += mins
@@ -217,7 +217,7 @@ function calcServerPeriodStats(
       const s = eStart < periodStart ? periodStart : eStart
       const ed = eEnd > periodEnd ? periodEnd : eEnd
       if (ed > s) {
-        const mins = (ed.getTime() - s.getTime()) / 60000
+        const mins = ((ed.getTime() - s.getTime()) / 60000) * asset.quantity
         if (e.plan_type === 'planned') plannedMins += mins
         else {
           unplannedMins += mins

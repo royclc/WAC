@@ -111,7 +111,7 @@ function calcStats(
       const s = eStart < monthStart ? monthStart : eStart
       const ed = eEnd > monthEnd ? monthEnd : eEnd
       if (ed > s) {
-        const mins = (ed.getTime() - s.getTime()) / 60000
+        const mins = ((ed.getTime() - s.getTime()) / 60000) * asset.quantity
         if (e.plan_type === 'planned') plannedMins += mins
         else {
           unplannedMins += mins
@@ -335,7 +335,7 @@ export default function NetworkAvailabilityCalendar() {
           const s = eStart < monthStart ? monthStart : eStart
           const ed = eEnd > monthEnd ? monthEnd : eEnd
           if (ed > s) {
-            const mins = (ed.getTime() - s.getTime()) / 60000
+            const mins = ((ed.getTime() - s.getTime()) / 60000) * asset.quantity
             if (e.plan_type === 'planned') plannedMins += mins
             else {
               unplannedMins += mins
