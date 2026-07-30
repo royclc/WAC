@@ -182,38 +182,42 @@ export default function NetworkAvailabilityCalendar() {
   const fetchAssets = useCallback(async () => {
     const { data, error } = await supabase
       .from('org_devices')
-      .select('*, organizations(name, type)')
+      .select('*, organizations(name, type, exclude_from_availability)')
     if (error) {
       console.error('Failed to fetch org_devices:', error)
       return
     }
-    const mapped: NetworkAsset[] = (data || []).map((d: any) => ({
-      id: d.id,
-      name: d.name,
-      unit: d.organizations?.name || '',
-      majorCategory: d.organizations?.type === 'headquarters' ? '總局' : '分局稽徵所',
-      zone: d.zone as 'internal' | 'external',
-      deviceType: d.device_type,
-      quantity: d.quantity,
-    }))
+    const mapped: NetworkAsset[] = (data || [])
+      .filter((d: any) => !d.organizations?.exclude_from_availability)
+      .map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        unit: d.organizations?.name || '',
+        majorCategory: d.organizations?.type === 'headquarters' ? '總局' : '分局稽徵所',
+        zone: d.zone as 'internal' | 'external',
+        deviceType: d.device_type,
+        quantity: d.quantity,
+      }))
     setNetworkAssets(mapped)
   }, [])
 
   const fetchCircuits = useCallback(async () => {
     const { data, error } = await supabase
       .from('org_circuits')
-      .select('*, organizations(name)')
+      .select('*, organizations(name, exclude_from_availability)')
     if (error) {
       console.error('Failed to fetch org_circuits:', error)
       return
     }
-    const mapped: Circuit[] = (data || []).map((d: any) => ({
-      id: d.id,
-      unit: d.organizations?.name || '',
-      circuit_number: d.circuit_number,
-      bandwidth: d.bandwidth,
-      ip_address: d.ip_address || '',
-    }))
+    const mapped: Circuit[] = (data || [])
+      .filter((d: any) => !d.organizations?.exclude_from_availability)
+      .map((d: any) => ({
+        id: d.id,
+        unit: d.organizations?.name || '',
+        circuit_number: d.circuit_number,
+        bandwidth: d.bandwidth,
+        ip_address: d.ip_address || '',
+      }))
     setCircuits(mapped)
   }, [])
 
@@ -683,7 +687,7 @@ export default function NetworkAvailabilityCalendar() {
                 {deviceTypeReport.map(({ label, stats }) => (
                   <tr key={label} className="border-b border-[var(--color-border)] hover:bg-[var(--color-table-header)]">
                     <td className="px-4 py-3 font-medium">{label}</td>
-                    <td className="text-right px-4 py-3 font-mono text-xs">{hoursPerDevice}*{stats.count}</td>
+                    <td className="text-right px-4 py-3 font-mono text-xs">{stats.count > 1 ? `${hoursPerDevice}*${stats.count}` : hoursPerDevice}</td>
                     <td className="text-right px-4 py-3 text-[var(--color-warning)]">{stats.plannedHours}</td>
                     <td className="text-right px-4 py-3 text-[var(--color-danger)]">{stats.unplannedHours}</td>
                     <td className="text-right px-4 py-3 font-semibold">{Number((stats.plannedHours + stats.unplannedHours).toFixed(2))}</td>
