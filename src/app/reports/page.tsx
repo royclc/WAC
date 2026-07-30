@@ -874,19 +874,46 @@ export default function ReportsPage() {
       })
     })
 
-    const notes: NetworkDeviceNote[] = []
-    let noteNum = 2
+    // Build event signature per device group to share note numbers
+    const groupSignatures = new Map<string, string>()
     deviceGroups.forEach((g) => {
       const data = deviceNoteData.get(g.label)
       if (!data || data.lines.length === 0) return
-      notes.push({ noteNum: noteNum++, deviceLabel: g.label, eventLines: data.lines, hasPlanned: data.hasPlanned, hasUnplanned: data.hasUnplanned })
+      const assetIds = new Set(g.assets.map((a) => a.id))
+      const keys = new Set<string>()
+      downtimeEvents.forEach((e) => {
+        if (!assetIds.has(e.asset_id)) return
+        const eStart = parseLocalDate(e.start_time)
+        const eEnd = parseLocalDate(e.end_time)
+        if (eEnd <= qStart || eStart >= qEnd) return
+        keys.add(`${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`)
+      })
+      groupSignatures.set(g.label, Array.from(keys).sort().join('||'))
+    })
+
+    const signatureToNote = new Map<string, number>()
+    const notes: NetworkDeviceNote[] = []
+    let noteNum = 2
+    deviceGroups.forEach((g) => {
+      const sig = groupSignatures.get(g.label)
+      if (!sig) return
+      if (!signatureToNote.has(sig)) {
+        signatureToNote.set(sig, noteNum)
+        const data = deviceNoteData.get(g.label)!
+        notes.push({ noteNum, deviceLabel: g.label, eventLines: data.lines, hasPlanned: data.hasPlanned, hasUnplanned: data.hasUnplanned })
+        noteNum++
+      }
     })
 
     const byPlanned = new Map<string, number>()
     const byUnplanned = new Map<string, number>()
-    notes.forEach((note) => {
-      if (note.hasPlanned) byPlanned.set(note.deviceLabel, note.noteNum)
-      if (note.hasUnplanned) byUnplanned.set(note.deviceLabel, note.noteNum)
+    deviceGroups.forEach((g) => {
+      const sig = groupSignatures.get(g.label)
+      if (!sig) return
+      const num = signatureToNote.get(sig)!
+      const data = deviceNoteData.get(g.label)!
+      if (data.hasPlanned) byPlanned.set(g.label, num)
+      if (data.hasUnplanned) byUnplanned.set(g.label, num)
     })
 
     return { networkDeviceNotes: notes, noteByDevicePlanned: byPlanned, noteByDeviceUnplanned: byUnplanned }
