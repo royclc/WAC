@@ -666,6 +666,14 @@ export default function ReportsPage() {
     const endPeriod = quarterPeriods[currentPeriodIndex]
     return endPeriod ? { start: quarterRange.start, end: endPeriod.end } : quarterRange
   }, [upToMonth, quarterRange, quarterPeriods, currentPeriodIndex])
+  const calendarMonthRange = useMemo(() => {
+    const adYear = rocYear + 1911
+    const start = new Date(adYear, month - 1, 1)
+    const end = new Date(adYear, month, 1)
+    return { start, end }
+  }, [rocYear, month])
+  const calendarMonthHours = useMemo(() => getDaysInMonth(new Date(rocYear + 1911, month - 1)) * 24, [rocYear, month])
+  const fiberMonthLabel = `${rocYear}年${month}月`
   const deviceGroups = useMemo(() => getDeviceGroups(networkAssets), [networkAssets])
 
   const now = new Date()
@@ -963,14 +971,10 @@ export default function ReportsPage() {
 
   // 表(a): per-circuit availability summary
   interface CircuitAvailRow { unit: string; circuit_number: string; bandwidth: string; ip_address: string; serviceHours: number; plannedHours: number; unplannedHours: number; unplannedNonExternalHours?: number }
-  const selectedMonthHours = useMemo(() => {
-    const adYear = rocYear + 1911
-    return getDaysInMonth(new Date(adYear, month - 1)) * 24
-  }, [rocYear, month])
 
   const circuitAvailSummary = useMemo(() => {
-    const qStart = effectiveRange.start
-    const qEnd = effectiveRange.end
+    const qStart = calendarMonthRange.start
+    const qEnd = calendarMonthRange.end
     return circuits.map((c) => {
       let plannedMin = 0
       let unplannedMin = 0
@@ -993,25 +997,25 @@ export default function ReportsPage() {
         circuit_number: c.circuit_number,
         bandwidth: c.bandwidth || '',
         ip_address: c.ip_address || '',
-        serviceHours: selectedMonthHours,
+        serviceHours: calendarMonthHours,
         plannedHours: Math.round((plannedMin / 60) * 100) / 100,
         unplannedHours: Math.round((unplannedMin / 60) * 100) / 100,
         unplannedNonExternalHours: Math.round((unplannedNonExternalMin / 60) * 100) / 100,
       } as CircuitAvailRow
     })
-  }, [circuits, circuitEvents, effectiveRange, selectedMonthHours])
+  }, [circuits, circuitEvents, calendarMonthRange, calendarMonthHours])
 
   const circuitSummaryAll = useMemo(() => {
-    return getCircuitEventSummaries(circuits, circuitEvents, effectiveRange.start, effectiveRange.end)
-  }, [circuits, circuitEvents, effectiveRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, calendarMonthRange.start, calendarMonthRange.end)
+  }, [circuits, circuitEvents, calendarMonthRange])
 
   const circuitSummaryPlanned = useMemo(() => {
-    return getCircuitEventSummaries(circuits, circuitEvents, effectiveRange.start, effectiveRange.end, 'planned')
-  }, [circuits, circuitEvents, effectiveRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, calendarMonthRange.start, calendarMonthRange.end, 'planned')
+  }, [circuits, circuitEvents, calendarMonthRange])
 
   const circuitSummaryUnplanned = useMemo(() => {
-    return getCircuitEventSummaries(circuits, circuitEvents, effectiveRange.start, effectiveRange.end, 'unplanned')
-  }, [circuits, circuitEvents, effectiveRange])
+    return getCircuitEventSummaries(circuits, circuitEvents, calendarMonthRange.start, calendarMonthRange.end, 'unplanned')
+  }, [circuits, circuitEvents, calendarMonthRange])
 
   // ═══ Server (hardware) stats ═══
   const serverMonthlySummary = useMemo(() => {
@@ -1412,7 +1416,7 @@ export default function ReportsPage() {
         ],
       }))
       if (circuitAvailSummary.length === 0) {
-        rows.push(new TableRow({ children: [new TableCell({ borders: createDocxBorders(), columnSpan: 9, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '本季無線路資料', size: 20, font: '標楷體' })] })] })] }))
+        rows.push(new TableRow({ children: [new TableCell({ borders: createDocxBorders(), columnSpan: 9, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '本月無線路資料', size: 20, font: '標楷體' })] })] })] }))
       } else {
         const unitGroups: { unit: string; items: CircuitAvailRow[] }[] = []
         circuitAvailSummary.forEach((s) => { const g = unitGroups.find((x) => x.unit === s.unit); if (g) g.items.push(s); else unitGroups.push({ unit: s.unit, items: [s] }) })
@@ -1463,7 +1467,7 @@ export default function ReportsPage() {
               columnSpan: 7,
               children: [new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '本季無相關事件', size: 20, font: '標楷體' })],
+                children: [new TextRun({ text: '本月無相關事件', size: 20, font: '標楷體' })],
               })],
             }),
           ],
@@ -1512,29 +1516,29 @@ export default function ReportsPage() {
         children: [
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `${rocYear}年第${quarter}季 光纖數據線路及設備維運服務報告`, bold: true, size: 28, font: '標楷體' })],
+            children: [new TextRun({ text: `${fiberMonthLabel} 光纖數據線路及設備維運服務報告`, bold: true, size: 28, font: '標楷體' })],
           }),
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
 
           // (a) 連線與服務中斷彙總列表
-          new Paragraph({ children: [new TextRun({ text: `(a) 連線與服務中斷彙總列表 — ${rocYear}年第${quarter}季`, bold: true, size: 24, font: '標楷體' })] }),
+          new Paragraph({ children: [new TextRun({ text: `(a) 連線與服務中斷彙總列表 — ${fiberMonthLabel}`, bold: true, size: 24, font: '標楷體' })] }),
           buildCircuitAvailDocxTable(),
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
 
           // (b) 計畫性停止服務期間與原因彙整表
-          new Paragraph({ children: [new TextRun({ text: `(b) 計畫性停止服務期間與原因彙整表 — ${rocYear}年第${quarter}季`, bold: true, size: 24, font: '標楷體' })] }),
+          new Paragraph({ children: [new TextRun({ text: `(b) 計畫性停止服務期間與原因彙整表 — ${fiberMonthLabel}`, bold: true, size: 24, font: '標楷體' })] }),
           buildCircuitDocxTable(circuitSummaryPlanned),
           new Paragraph({ children: [new TextRun({ text: '', size: 20 })] }),
 
           // (c) 非計畫性停止服務期間與原因彙整表
-          new Paragraph({ children: [new TextRun({ text: `(c) 非計畫性停止服務期間與原因彙整表 — ${rocYear}年第${quarter}季`, bold: true, size: 24, font: '標楷體' })] }),
+          new Paragraph({ children: [new TextRun({ text: `(c) 非計畫性停止服務期間與原因彙整表 — ${fiberMonthLabel}`, bold: true, size: 24, font: '標楷體' })] }),
           buildCircuitDocxTable(circuitSummaryUnplanned),
         ],
       }],
     })
 
     const blob = await Packer.toBlob(doc)
-    saveAs(blob, `光纖數據線路報告_${rocYear}年第${quarter}季.docx`)
+    saveAs(blob, `光纖數據線路報告_${fiberMonthLabel}.docx`)
   }
 
   // ── Render circuit summary table ──
@@ -1558,7 +1562,7 @@ export default function ReportsPage() {
           <h3 className="font-semibold">{title}</h3>
         </div>
         {summaries.length === 0 ? (
-          <div className="p-8 text-center text-[var(--color-text-muted)]">本季無相關事件</div>
+          <div className="p-8 text-center text-[var(--color-text-muted)]">本月無相關事件</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1616,7 +1620,7 @@ export default function ReportsPage() {
           <h3 className="font-semibold">{title}</h3>
         </div>
         {rows.length === 0 ? (
-          <div className="p-8 text-center text-[var(--color-text-muted)]">本季無線路資料</div>
+          <div className="p-8 text-center text-[var(--color-text-muted)]">本月無線路資料</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -2145,15 +2149,15 @@ export default function ReportsPage() {
                 </button>
               </div>
               {renderCircuitAvailTable(
-                `(a) 連線與服務中斷彙總列表 — ${rocYear}年第${quarter}季`,
+                `(a) 連線與服務中斷彙總列表 — ${fiberMonthLabel}`,
                 circuitAvailSummary,
               )}
               {renderCircuitTable(
-                `(b) 計畫性停止服務期間與原因彙整表 — ${rocYear}年第${quarter}季`,
+                `(b) 計畫性停止服務期間與原因彙整表 — ${fiberMonthLabel}`,
                 circuitSummaryPlanned,
               )}
               {renderCircuitTable(
-                `(c) 非計畫性停止服務期間與原因彙整表 — ${rocYear}年第${quarter}季`,
+                `(c) 非計畫性停止服務期間與原因彙整表 — ${fiberMonthLabel}`,
                 circuitSummaryUnplanned,
               )}
             </>
