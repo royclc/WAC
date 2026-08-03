@@ -2138,6 +2138,10 @@ export default function ReportsPage() {
           {/* ══════════════════════════════════════════════ */}
           {networkSubTab === 'fiber' && (
             <>
+              {/* Period description */}
+              <div className="mb-4 px-4 py-3 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] text-sm text-[var(--color-text-muted)]">
+                統計區間：{fiberMonthLabel}（{rocYear + 1911}年{month}月1日～{rocYear + 1911}年{month}月{getDaysInMonth(new Date(rocYear + 1911, month - 1))}日）
+              </div>
               {/* Export button */}
               <div className="flex justify-end mb-4">
                 <button
