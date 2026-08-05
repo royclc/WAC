@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Search, Monitor, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Monitor, Loader2, Server, Laptop, Package } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface OfficeAsset {
@@ -112,7 +112,7 @@ export default function OfficeAssetsPage() {
     setFormNote(a.note); setFormTaxPropNum(a.tax_property_number || '')
     const parts = (a.property_number || '').split('-')
     setFormProp1(parts[0] || ''); setFormProp2(parts[1] || ''); setFormProp3(parts[2] || '')
-    setFormChtId(a.cht_asset_id); setFormZone(a.network_zone)
+    setFormChtId(a.cht_asset_id === '國稅局' ? '' : a.cht_asset_id); setFormZone(a.network_zone)
     setFormIp(a.ip_address); setFormHostname(a.hostname)
     setShowModal(true)
   }
@@ -130,7 +130,7 @@ export default function OfficeAssetsPage() {
       note: formNote.trim(),
       tax_property_number: !formIsCht ? formTaxPropNum.trim() : '',
       property_number: formIsCht && (formProp1 || formProp2 || formProp3) ? [formProp1.trim(), formProp2.trim(), formProp3.trim()].join('-') : '',
-      cht_asset_id: formIsCht ? formChtId.trim() : '',
+      cht_asset_id: formIsCht ? formChtId.trim() : '國稅局',
       network_zone: NEEDS_NETWORK.includes(formType) ? formZone : '',
       ip_address: NEEDS_NETWORK.includes(formType) && NEEDS_IP.includes(formZone) ? formIp.trim() : '',
       hostname: NEEDS_NETWORK.includes(formType) && NEEDS_IP.includes(formZone) ? formHostname.trim() : '',
@@ -154,6 +154,15 @@ export default function OfficeAssetsPage() {
 
   function displayType(a: OfficeAsset) {
     return a.asset_type === '其他' ? a.asset_type_other : a.asset_type
+  }
+
+  function assetIcon(type: string) {
+    switch (type) {
+      case '主機': return <Server className="w-4 h-4 inline mr-2 text-blue-500" />
+      case '螢幕': return <Monitor className="w-4 h-4 inline mr-2 text-emerald-500" />
+      case '筆電': return <Laptop className="w-4 h-4 inline mr-2 text-purple-500" />
+      default: return <Package className="w-4 h-4 inline mr-2 text-amber-500" />
+    }
   }
 
   if (loading) {
@@ -201,7 +210,7 @@ export default function OfficeAssetsPage() {
                 <th className="text-left px-4 py-3 font-medium">使用者</th>
                 <th className="text-left px-4 py-3 font-medium">國稅局編號</th>
                 <th className="text-left px-4 py-3 font-medium">財產編號</th>
-                <th className="text-left px-4 py-3 font-medium">資產ID</th>
+                <th className="text-left px-4 py-3 font-medium">資產歸屬/ID</th>
                 <th className="text-left px-4 py-3 font-medium">網段</th>
                 <th className="text-left px-4 py-3 font-medium">IP</th>
                 <th className="text-left px-4 py-3 font-medium">HostName</th>
@@ -213,7 +222,7 @@ export default function OfficeAssetsPage() {
               {filtered.map((a) => (
                 <tr key={a.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
                   <td className="px-4 py-3 font-medium whitespace-nowrap">
-                    <Monitor className="w-4 h-4 inline mr-2 text-blue-500" />
+                    {assetIcon(a.asset_type)}
                     {displayType(a)}
                   </td>
                   <td className="px-4 py-3">
