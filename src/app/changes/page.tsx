@@ -38,7 +38,7 @@ interface HwOption {
   location: string
 }
 
-const CATEGORIES = ['GCB', 'WSUS', 'Firewall', 'VM', 'Redhat', '實體機', '其他系統設定'] as const
+const CATEGORIES = ['Windows', 'GCB', 'WSUS', 'Firewall', 'VM', 'Redhat', '實體機', '其他系統設定'] as const
 type Category = typeof CATEGORIES[number]
 
 const GCB_PLATFORMS = ['Windows', 'RedHat', '其他']
@@ -53,11 +53,12 @@ const DESCRIPTION_OPTIONS = ['依業主需求', '弱點修補', '測試', '其�
 const FW_CHANGE_TYPES = ['新增', '修改', '其他']
 const FW_LOCATIONS = ['中心', '北國', '北區', '中區', '南區', '高國']
 const RH_CHANGE_TYPES = ['系統更新', '設定變更', '弱點修補', '其他']
+const WIN_OS_VERSIONS = ['Windows Server 2019', 'Windows Server 2022']
 
 const today = () => new Date().toISOString().split('T')[0]
 
 export default function ServiceChangesPage() {
-  const [activeTab, setActiveTab] = useState<Category>('GCB')
+  const [activeTab, setActiveTab] = useState<Category>('Windows')
   const [records, setRecords] = useState<ServiceChange[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -85,6 +86,7 @@ export default function ServiceChangesPage() {
   const [formPurpose, setFormPurpose] = useState('')
   const [formIsReviewed, setFormIsReviewed] = useState(false)
   const [formNote, setFormNote] = useState('')
+  const [formOsVersions, setFormOsVersions] = useState<string[]>([...WIN_OS_VERSIONS])
 
   const fetchRecords = useCallback(async () => {
     setLoading(true)
@@ -130,9 +132,11 @@ export default function ServiceChangesPage() {
     setHostZoneFilter('全部')
     setHwSearch('')
     setHwCatFilter('全部')
+    setFormOsVersions([...WIN_OS_VERSIONS])
   }
 
   function getDefaultPlatform(cat: Category) {
+    if (cat === 'Windows') return 'Windows'
     if (cat === 'GCB') return 'Windows'
     if (cat === 'WSUS') return '全部'
     if (cat === 'VM') return 'Windows'
@@ -192,6 +196,7 @@ export default function ServiceChangesPage() {
     setFormPurpose(r.purpose || '')
     setFormIsReviewed(r.is_reviewed || false)
     setFormNote(r.note)
+    setFormOsVersions(r.category === 'Windows' && r.version ? r.version.split('|||') : [...WIN_OS_VERSIONS])
     setHostSearch('')
     setShowModal(true)
   }
@@ -219,7 +224,7 @@ export default function ServiceChangesPage() {
       category: activeTab,
       change_date: formDate,
       platform: formPlatform,
-      version: formVersion,
+      version: activeTab === 'Windows' ? formOsVersions.join('|||') : formVersion,
       change_type: activeTab === 'Firewall' ? changeType : formChangeType,
       description: activeTab === 'Firewall' ? '' : desc,
       description_custom: formDesc === '其他' ? formDescCustom.trim() : '',
@@ -279,6 +284,10 @@ export default function ServiceChangesPage() {
             '備註': r.note,
           }
         })
+      } else if (cat === 'Windows') {
+        rows = catRecords.map((r: ServiceChange) => ({
+          '日期': r.change_date, 'OS 版本': r.version?.replace(/\|\|\|/g, ', '), '修改說明': r.description, '備註': r.note,
+        }))
       } else if (cat === 'GCB') {
         rows = catRecords.map((r: ServiceChange) => ({
           '日期': r.change_date, '平台': r.platform, '修改說明': r.description, '備註': r.note,
@@ -338,6 +347,7 @@ export default function ServiceChangesPage() {
   // Column config per category
   const getColumns = (cat: Category) => {
     switch (cat) {
+      case 'Windows': return ['日期', 'OS 版本', '修改說明', '備註']
       case 'GCB': return ['日期', '平台', '修改說明', '備註']
       case 'WSUS': return ['日期', '平台', '修改說明', '備註']
       case 'Firewall': return ['日期', '駐點單號', '類型', '開通目的', '送檢核']
@@ -350,6 +360,7 @@ export default function ServiceChangesPage() {
 
   const getCellValues = (r: ServiceChange, cat: Category) => {
     switch (cat) {
+      case 'Windows': return [r.change_date, r.version?.replace(/\|\|\|/g, ', '), r.description, r.note]
       case 'GCB': return [r.change_date, r.platform, r.description, r.note]
       case 'WSUS': return [r.change_date, r.platform, r.description, r.note]
       case 'Firewall': return [r.change_date, r.ticket_no, r.change_type, r.purpose, r.is_reviewed ? '✓' : '']
@@ -401,6 +412,31 @@ export default function ServiceChangesPage() {
               className="px-2 py-1.5 text-xs border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)]">上週</button>
           </div>
         </div>
+
+        {/* Windows */}
+        {activeTab === 'Windows' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1">平台</label>
+              <input value="Windows" disabled
+                className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm bg-[var(--color-table-header)] text-[var(--color-text-muted)]" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">OS 版本</label>
+              <div className="flex gap-4">
+                {WIN_OS_VERSIONS.map((v) => (
+                  <label key={v} className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={formOsVersions.includes(v)}
+                      onChange={(e) => setFormOsVersions(e.target.checked ? [...formOsVersions, v] : formOsVersions.filter((x) => x !== v))}
+                      className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer" />
+                    <span className="text-sm">{v}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {renderDescriptionField()}
+          </>
+        )}
 
         {/* GCB */}
         {activeTab === 'GCB' && (
@@ -711,6 +747,7 @@ export default function ServiceChangesPage() {
   )
 
   const tabColors: Record<string, string> = {
+    'Windows': 'text-sky-400',
     'GCB': 'text-blue-400',
     'WSUS': 'text-emerald-400',
     'Firewall': 'text-orange-400',
