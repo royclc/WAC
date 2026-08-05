@@ -269,8 +269,14 @@ export default function MaintenancePage() {
               <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:bg-[var(--color-hover)] rounded-lg transition-colors">
+                  <ChevronLeft className="w-4 h-4 text-[var(--color-text-muted)]" />
+                </button>
                 <h2 className="text-lg font-semibold">{formatMonthTitle(currentMonth)}</h2>
+                <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:bg-[var(--color-hover)] rounded-lg transition-colors">
+                  <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]" />
+                </button>
                 <YearMonthPicker currentDate={currentMonth} onChange={setCurrentMonth} />
               </div>
               <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 hover:bg-[var(--color-hover)] rounded-lg">
