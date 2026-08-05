@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Search, Monitor, Loader2, Server, Laptop, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Monitor, Loader2, Server, Laptop, Package, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import * as XLSX from 'xlsx'
 
 interface OfficeAsset {
   id: string
@@ -50,6 +51,8 @@ export default function OfficeAssetsPage() {
   const [formZone, setFormZone] = useState('')
   const [formIp, setFormIp] = useState('')
   const [formHostname, setFormHostname] = useState('')
+  const [sortKey, setSortKey] = useState<string>('')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const fetchAssets = useCallback(async () => {
     const { data, error } = await supabase
@@ -89,6 +92,73 @@ export default function OfficeAssetsPage() {
     }
     return true
   })
+
+  function getSortValue(a: OfficeAsset, key: string): string {
+    switch (key) {
+      case '資產類型': return displayType(a)
+      case '中華資產': return a.is_cht_asset ? '中華' : ''
+      case '使用者': return a.user_name
+      case '國稅局編號': return a.tax_property_number || ''
+      case '財產編號': return a.property_number || ''
+      case '資產歸屬/ID': return a.cht_asset_id || ''
+      case '網段': return a.network_zone || ''
+      case 'IP': return a.ip_address || ''
+      case 'HostName': return a.hostname || ''
+      case '備註': return a.note || ''
+      default: return ''
+    }
+  }
+
+  const sorted = sortKey
+    ? [...filtered].sort((a, b) => {
+        const va = getSortValue(a, sortKey)
+        const vb = getSortValue(b, sortKey)
+        const cmp = va.localeCompare(vb, 'zh-Hant')
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    : filtered
+
+  function toggleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  function sortIcon(key: string) {
+    if (sortKey !== key) return <ArrowUpDown className="w-3 h-3 ml-1 inline opacity-30" />
+    return sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline text-[var(--color-primary)]" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline text-[var(--color-primary)]" />
+  }
+
+  function exportExcel() {
+    const rows = filtered.map((a) => ({
+      '資產類型': displayType(a),
+      '中華資產': a.is_cht_asset ? '是' : '否',
+      '使用者': a.user_name,
+      '國稅局編號': a.tax_property_number || '',
+      '財產編號': a.property_number || '',
+      '資產歸屬/ID': a.cht_asset_id || '',
+      '網段': a.network_zone || '',
+      'IP': a.ip_address || '',
+      'HostName': a.hostname || '',
+      '備註': a.note || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{}])
+    if (rows.length > 0) {
+      const keys = Object.keys(rows[0])
+      ws['!cols'] = keys.map((k) => {
+        const maxLen = Math.max(k.length * 2, ...rows.map((r) => String(r[k as keyof typeof r] || '').length))
+        return { wch: Math.min(Math.max(maxLen, 8), 50) }
+      })
+    }
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '辦公室資產')
+    XLSX.writeFile(wb, `辦公室資產_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
 
   // Get unique types for filter dropdown
   const uniqueTypes = [...new Set(assets.map((a) => a.asset_type === '其他' ? a.asset_type_other : a.asset_type))].sort()
@@ -180,9 +250,14 @@ export default function OfficeAssetsPage() {
     <AppShell>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">辦公室資產管理</h1>
-        <button onClick={openNew} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
-          <Plus className="w-4 h-4" /> 新增資產
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportExcel} className="px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-hover)] flex items-center gap-1">
+            <Download className="w-4 h-4" /> 匯出 Excel
+          </button>
+          <button onClick={openNew} className="px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-hover)] flex items-center gap-1">
+            <Plus className="w-4 h-4" /> 新增資產
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -205,21 +280,16 @@ export default function OfficeAssetsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--color-border)] bg-[var(--color-table-header)]">
-                <th className="text-left px-4 py-3 font-medium">資產類型</th>
-                <th className="text-left px-4 py-3 font-medium">中華資產</th>
-                <th className="text-left px-4 py-3 font-medium">使用者</th>
-                <th className="text-left px-4 py-3 font-medium">國稅局編號</th>
-                <th className="text-left px-4 py-3 font-medium">財產編號</th>
-                <th className="text-left px-4 py-3 font-medium">資產歸屬/ID</th>
-                <th className="text-left px-4 py-3 font-medium">網段</th>
-                <th className="text-left px-4 py-3 font-medium">IP</th>
-                <th className="text-left px-4 py-3 font-medium">HostName</th>
-                <th className="text-left px-4 py-3 font-medium">備註</th>
+                {['資產類型', '中華資產', '使用者', '國稅局編號', '財產編號', '資產歸屬/ID', '網段', 'IP', 'HostName', '備註'].map((col) => (
+                  <th key={col} className="text-left px-4 py-3 font-medium cursor-pointer select-none hover:text-[var(--color-primary)] transition-colors" onClick={() => toggleSort(col)}>
+                    {col}{sortIcon(col)}
+                  </th>
+                ))}
                 <th className="text-right px-4 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => (
+              {sorted.map((a) => (
                 <tr key={a.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-hover)]">
                   <td className="px-4 py-3 font-medium whitespace-nowrap">
                     {assetIcon(a.asset_type)}
