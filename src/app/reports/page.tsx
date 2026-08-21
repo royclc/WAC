@@ -922,46 +922,62 @@ export default function ReportsPage() {
       })
     })
 
-    // Build event signature per device group to share note numbers
-    const groupSignatures = new Map<string, string>()
+    // Build separate signatures for planned / unplanned per device group
+    const groupSigPlanned = new Map<string, string>()
+    const groupSigUnplanned = new Map<string, string>()
     deviceGroups.forEach((g) => {
       const data = deviceNoteData.get(g.label)
       if (!data || data.lines.length === 0) return
       const assetIds = new Set(g.assets.map((a) => a.id))
-      const keys = new Set<string>()
+      const plannedKeys = new Set<string>()
+      const unplannedKeys = new Set<string>()
       downtimeEvents.forEach((e) => {
         if (!assetIds.has(e.asset_id)) return
         const eStart = parseLocalDate(e.start_time)
         const eEnd = parseLocalDate(e.end_time)
         if (eEnd <= qStart || eStart >= qEnd) return
-        keys.add(`${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`)
+        const key = `${e.title}|${e.start_time}|${e.end_time}|${e.plan_type}`
+        if (e.plan_type === 'planned') plannedKeys.add(key)
+        else unplannedKeys.add(key)
       })
-      groupSignatures.set(g.label, Array.from(keys).sort().join('||'))
+      if (plannedKeys.size > 0) groupSigPlanned.set(g.label, Array.from(plannedKeys).sort().join('||'))
+      if (unplannedKeys.size > 0) groupSigUnplanned.set(g.label, Array.from(unplannedKeys).sort().join('||'))
     })
 
-    const signatureToNote = new Map<string, number>()
+    const sigToNotePlanned = new Map<string, number>()
+    const sigToNoteUnplanned = new Map<string, number>()
     const notes: NetworkDeviceNote[] = []
     let noteNum = 2
+
+    // Planned notes first
     deviceGroups.forEach((g) => {
-      const sig = groupSignatures.get(g.label)
-      if (!sig) return
-      if (!signatureToNote.has(sig)) {
-        signatureToNote.set(sig, noteNum)
-        const data = deviceNoteData.get(g.label)!
-        notes.push({ noteNum, deviceLabel: g.label, eventLines: data.lines, hasPlanned: data.hasPlanned, hasUnplanned: data.hasUnplanned })
-        noteNum++
-      }
+      const sig = groupSigPlanned.get(g.label)
+      if (!sig || sigToNotePlanned.has(sig)) return
+      sigToNotePlanned.set(sig, noteNum)
+      const data = deviceNoteData.get(g.label)!
+      const plannedLines = data.lines.filter((l) => l.rawPlanType === 'planned')
+      notes.push({ noteNum, deviceLabel: g.label, eventLines: plannedLines, hasPlanned: true, hasUnplanned: false })
+      noteNum++
+    })
+
+    // Then unplanned notes
+    deviceGroups.forEach((g) => {
+      const sig = groupSigUnplanned.get(g.label)
+      if (!sig || sigToNoteUnplanned.has(sig)) return
+      sigToNoteUnplanned.set(sig, noteNum)
+      const data = deviceNoteData.get(g.label)!
+      const unplannedLines = data.lines.filter((l) => l.rawPlanType !== 'planned')
+      notes.push({ noteNum, deviceLabel: g.label, eventLines: unplannedLines, hasPlanned: false, hasUnplanned: true })
+      noteNum++
     })
 
     const byPlanned = new Map<string, number>()
     const byUnplanned = new Map<string, number>()
     deviceGroups.forEach((g) => {
-      const sig = groupSignatures.get(g.label)
-      if (!sig) return
-      const num = signatureToNote.get(sig)!
-      const data = deviceNoteData.get(g.label)!
-      if (data.hasPlanned) byPlanned.set(g.label, num)
-      if (data.hasUnplanned) byUnplanned.set(g.label, num)
+      const sigP = groupSigPlanned.get(g.label)
+      if (sigP) byPlanned.set(g.label, sigToNotePlanned.get(sigP)!)
+      const sigU = groupSigUnplanned.get(g.label)
+      if (sigU) byUnplanned.set(g.label, sigToNoteUnplanned.get(sigU)!)
     })
 
     return { networkDeviceNotes: notes, noteByDevicePlanned: byPlanned, noteByDeviceUnplanned: byUnplanned }
@@ -1105,44 +1121,55 @@ export default function ReportsPage() {
 
     const assetOrder = serverAssets.map((a) => a.name)
 
-    const groupSignatures = new Map<string, string>()
+    const groupSigPlanned = new Map<string, string>()
+    const groupSigUnplanned = new Map<string, string>()
     assetOrder.forEach((label) => {
       const evMap = deviceEventsMap.get(label)
       if (!evMap || evMap.size === 0) return
-      groupSignatures.set(label, Array.from(evMap.keys()).sort().join('||'))
+      const plannedKeys: string[] = []
+      const unplannedKeys: string[] = []
+      evMap.forEach((ev, key) => {
+        if (ev.rawPlanType === 'planned') plannedKeys.push(key)
+        else unplannedKeys.push(key)
+      })
+      if (plannedKeys.length > 0) groupSigPlanned.set(label, plannedKeys.sort().join('||'))
+      if (unplannedKeys.length > 0) groupSigUnplanned.set(label, unplannedKeys.sort().join('||'))
     })
 
-    const signatureToNote = new Map<string, number>()
+    const sigToNotePlanned = new Map<string, number>()
+    const sigToNoteUnplanned = new Map<string, number>()
     const notes: ServerDeviceNote[] = []
     let noteNum = 2
+
+    // Planned notes first
     assetOrder.forEach((label) => {
-      const sig = groupSignatures.get(label)
-      if (!sig) return
-      if (!signatureToNote.has(sig)) {
-        signatureToNote.set(sig, noteNum)
-        const evMap = deviceEventsMap.get(label)!
-        const events = Array.from(evMap.values())
-        notes.push({
-          noteNum,
-          deviceLabel: label,
-          events,
-          hasPlanned: events.some((ev) => ev.rawPlanType === 'planned'),
-          hasUnplanned: events.some((ev) => ev.rawPlanType === 'unplanned'),
-        })
-        noteNum++
-      }
+      const sig = groupSigPlanned.get(label)
+      if (!sig || sigToNotePlanned.has(sig)) return
+      sigToNotePlanned.set(sig, noteNum)
+      const evMap = deviceEventsMap.get(label)!
+      const events = Array.from(evMap.values()).filter((ev) => ev.rawPlanType === 'planned')
+      notes.push({ noteNum, deviceLabel: label, events, hasPlanned: true, hasUnplanned: false })
+      noteNum++
+    })
+
+    // Then unplanned notes
+    assetOrder.forEach((label) => {
+      const sig = groupSigUnplanned.get(label)
+      if (!sig || sigToNoteUnplanned.has(sig)) return
+      sigToNoteUnplanned.set(sig, noteNum)
+      const evMap = deviceEventsMap.get(label)!
+      const events = Array.from(evMap.values()).filter((ev) => ev.rawPlanType !== 'planned')
+      notes.push({ noteNum, deviceLabel: label, events, hasPlanned: false, hasUnplanned: true })
+      noteNum++
     })
 
     const byPlanned = new Map<string, number>()
     const byUnplanned = new Map<string, number>()
     assetOrder.forEach((label) => {
-      const sig = groupSignatures.get(label)
-      if (!sig) return
-      const num = signatureToNote.get(sig)!
-      const evMap = deviceEventsMap.get(label)!
-      const events = Array.from(evMap.values())
-      if (events.some((ev) => ev.rawPlanType === 'planned')) byPlanned.set(label, num)
-      if (events.some((ev) => ev.rawPlanType === 'unplanned')) byUnplanned.set(label, num)
+      const sigP = groupSigPlanned.get(label)
+      if (sigP) byPlanned.set(label, sigToNotePlanned.get(sigP)!)
+      const sigU = groupSigUnplanned.get(label)
+      if (sigU) byUnplanned.set(label, sigToNoteUnplanned.get(sigU)!)
     })
 
     return { serverDeviceNotes: notes, serverNoteByPlanned: byPlanned, serverNoteByUnplanned: byUnplanned }
